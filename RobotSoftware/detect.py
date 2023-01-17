@@ -1,10 +1,10 @@
 from find_feature import find_features
 from preprocessing import preprocessing_img
 from uncertainty import Probabilistic
-import cv2
 import load_model
 import imutils
 import joblib
+import cv2
 import numpy as np
 import torch
 
@@ -23,7 +23,7 @@ class ModelsProcessing:
         self.size_model = load_model.load('models/size.json', "models/size.h5")
 
         # calib factors
-        self.cf1, self.cf2, self.cf3 = 0.9807243463285489, 0.9518439731431791, 0.9622422345027216
+        self.cf1, self.cf2, self.cf3 = 1, 1, 1
 
         # load color model
         self.color_model = load_model.load('models/color.json', "models/color.h5")
@@ -37,12 +37,8 @@ class ModelsProcessing:
         # load error logo model
         self.logo_model = torch.hub.load('ultralytics/yolov5', 'custom', path='models/logo.pt', force_reload=True)
         self.logo_model.iou = 0.5
-        self.logo_model.conf = 0.25
+        self.logo_model.conf = 0.5
         self.logo_classes = self.logo_model.names
-
-        # error logo
-        self.elogo = None
-        self.logo = None
 
     @staticmethod
     def size_result(y):
@@ -81,8 +77,11 @@ class ModelsProcessing:
         # calib features
         d1, d2, d3 = d1 * self.cf1, d2 * self.cf2, d3 * self.cf3
 
+        size, color = 'error', 'error'
+        cX, cY = None, None
+
         if d1 == 0:
-            return img
+            return img, size, color, cX, cY
         try:
             # size
             data = np.array([(d1, d2, d3)])
@@ -92,7 +91,6 @@ class ModelsProcessing:
             size = self.size_result(y_pred)
             if prob_predict[y_pred, 0] < 0.5:
                 size = 'error'
-
             # color
             cX = int(center[0, 0])
             cY = int(center[0, 1])
@@ -101,18 +99,14 @@ class ModelsProcessing:
             color = self.color_result(y_pred)
             if predict_color[0, y_pred] < 0.65:
                 color = 'error'
-
-            # put label
-            cv2.putText(img, size, (10, 20), cv2.FONT_HERSHEY_COMPLEX, 0.7, (255, 100, 10), 2)
-            cv2.putText(img, color, (10, 50), cv2.FONT_HERSHEY_COMPLEX, 0.7, (255, 100, 10), 2)
         except Exception as e:
             print(e, 'undefined object')
             pass
-        return img
+        return img, size, color, cX, cY
 
     @staticmethod
     def yolo_detect(I, model):
-        result = model([I], size=320)
+        result = model([I], size=160)
         # cordinates is: x1, y2, x2, y2, confidence
         labels, cordinates = result.xyxyn[0][:, -1], result.xyxyn[0][:, :-1]
         return labels, cordinates
@@ -142,11 +136,10 @@ class ModelsProcessing:
     def detect_object(self, I):
         img = cv2.cvtColor(I, cv2.COLOR_BGR2RGB)
         results = self.yolo_detect(img, model=self.obj_model)
-        frame = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         if not ((15 in results[0]) and (16 in results[0])):
             self.isObj = False
-            return frame, None
-        frame, crop_logo = self.yolo_bb_obj(results, frame, classes=self.obj_classes)
+            return I, None
+        frame, crop_logo = self.yolo_bb_obj(results, I, classes=self.obj_classes)
         self.isObj = True
         return frame, crop_logo
 
@@ -163,18 +156,14 @@ class ModelsProcessing:
                 cv2.rectangle(frame, (x1, y1 - 10), (x2, y1), (0, 0, 255), -1)
         return frame
 
-    def detect_elogo(self):
-        while True:
-            try:
-                I = cv2.cvtColor(self.elogo, cv2.COLOR_BGR2RGB)
-                I = cv2.resize(I, (150, 150))
-                result_logo = self.yolo_detect(I, model=self.logo_model)
-                I = cv2.cvtColor(I, cv2.COLOR_RGB2BGR)
-                if 0 in result_logo[0]:
-                    I = self.yolo_bb_elogo(result_logo, I, classes=self.logo_classes)
-                self.logo = I
-            except:
-                pass
+    def detect_elogo(self, elogo):
+        I = cv2.cvtColor(elogo, cv2.COLOR_BGR2RGB)
+        I = cv2.resize(I, (150, 150))
+        result_logo = self.yolo_detect(I, model=self.logo_model)
+        if 0 in result_logo[0]:
+            I = self.yolo_bb_elogo(result_logo, elogo, classes=self.logo_classes)
+            return I, 'error'
+        return elogo, 'good'
 
 
 models_process = ModelsProcessing()

@@ -1,16 +1,17 @@
 from PySide2.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PySide2.QtGui import QIcon, QImage, QPixmap
-from PySide2.QtCore import QSize
+from PySide2.QtCore import QSize, Qt
 from GUI import gui
 from communicate import serialCom, receive_thread
 from camera import mycam
 from detect import models_process
 from preprocessing import preprocessing_img
 from find_feature import find_features
+from database import my_database
+from calib_h import size_calib
 import math
 import sys
 import threading
-import cv2
 
 
 class MainWindow:
@@ -23,8 +24,18 @@ class MainWindow:
         self.isPortCnt = False
         self.isOpenCam = False
         self.isCalibMode = False
+        self.isCalib = False
+        self.isTestCalib = False
+        self.detect_result = ['not detect', 'not detect', 'not detect']
+        self.center_result = [0, 0]
+        self.pick_place = None
+        self.drop_place = None
+        self.type_dict = {}
+        self.coordinate_dict = {}
+        self.isAutoMode = False
+        self.isRobotAvailable = False
 
-        # robot params
+        # region robot params
         self.d1 = 12.9
         self.a2 = 14
         self.a3 = 14
@@ -39,8 +50,9 @@ class MainWindow:
         self.theta1 = 0
         self.theta2 = 0
         self.theta3 = 0
+        # endregion
 
-        # setup properties
+        # region setup gui object properties
         self.uic.btn_move.setDisabled(True)
         self.uic.btn_x_dec.setDisabled(True)
         self.uic.btn_y_dec.setDisabled(True)
@@ -56,10 +68,20 @@ class MainWindow:
         self.uic.btn_j3_inc.setDisabled(True)
         self.uic.btn_calib_size.setDisabled(True)
         self.uic.btn_test_size.setDisabled(True)
+        self.uic.btn_savepoint.setDisabled(True)
+        self.uic.btn_stop.setDisabled(True)
+        self.uic.btn_reset.setDisabled(True)
 
+        # endregion
+
+        # region events
         # event combo box
         self.uic.cb_com.activated.connect(self.list_ports())
         self.uic.cb_baudrate.activated.connect(self.list_baudrate())
+        self.uic.cb_point.activated.connect(self.list_points())
+        self.uic.cb_point.currentTextChanged.connect(self.changed_point)
+        self.uic.cb_sizetype.activated.connect(self.list_sizetype())
+        self.uic.cb_colortype.activated.connect(self.list_colortype())
 
         # event push button
         self.uic.btn_cnt.clicked.connect(self.connection)
@@ -82,14 +104,23 @@ class MainWindow:
         self.uic.btn_z_inc.clicked.connect(self.z_increase)
         self.uic.btn_move.clicked.connect(self.move)
         self.uic.btn_apply.clicked.connect(self.apply_conf)
-        self.uic.btn_start.clicked.connect(self.start)
+        self.uic.btn_start.clicked.connect(self.start_cam)
         self.uic.btn_calib_mode.clicked.connect(self.calib_model_mode)
+        self.uic.btn_calib_size.clicked.connect(self.is_calib)
+        self.uic.btn_test_size.clicked.connect(self.is_test_calib)
+        self.uic.rbutton_new.clicked.connect(self.teaching_mode)
+        self.uic.btn_savepoint.clicked.connect(self.save_point)
+        self.uic.btn_reset_point.clicked.connect(self.reset_point)
+        self.uic.btn_run.clicked.connect(self.run)
+        self.uic.btn_stop.clicked.connect(self.stop)
+        self.uic.btn_reset.clicked.connect(self.reset)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
         self.uic.slide_acc.valueChanged.connect(self.set_accelerate)
         self.uic.slide_deg.valueChanged.connect(self.set_degree)
         self.uic.slide_cm.valueChanged.connect(self.set_centimeters)
+        # endregion
 
     # region port connection
     def list_ports(self):
@@ -112,12 +143,16 @@ class MainWindow:
             self.isPortCnt = serialCom.connect(port_name=port_name, baud=baudrate)
             if self.isPortCnt:
                 receive_thread.start()
-                self.uic.light_stt.setStyleSheet("background: rgb(51,255,51); border-radius:20px")
+                self.uic.light_stt.setStyleSheet(
+                    "background: rgb(51,255,51); border-radius:20px; border-color: rgb(0, 0, 0); "
+                    "border-width : 0.5px; border-style:inset;")
                 self.uic.btn_cnt.setText("Disconnect")
                 self.uic.text_stt.setText("Status: On")
             else:
                 self.uic.text_stt.setText("Status: Off")
-                self.uic.light_stt.setStyleSheet("background: rgb(255,0,0); border-radius:20px")
+                self.uic.light_stt.setStyleSheet(
+                    "background: rgb(255,0,0); border-radius:20px; border-color: rgb(0, 0, 0); "
+                    "border-width : 0.5px; border-style:inset;")
                 self.msg.setIcon(QMessageBox.Warning)
                 self.msg.setText("Check your COM Port")
                 self.msg.setWindowTitle("Error")
@@ -129,6 +164,75 @@ class MainWindow:
             self.uic.btn_cnt.setText("Connect")
             self.uic.text_stt.setText("Status: Off")
             self.uic.light_stt.setStyleSheet("background: rgb(255,0,0); border-radius:20px")
+
+    # endregion
+
+    # region teaching pendant
+    def list_points(self):
+        p = ['P00', 'P01', 'P02', 'P03', 'P04']
+        self.uic.cb_point.addItems(p)
+        self.uic.cb_sizetype.setDisabled(True)
+        self.uic.cb_colortype.setDisabled(True)
+
+    def changed_point(self):
+        if self.uic.cb_point.currentText() == "P00":
+            self.uic.cb_sizetype.setDisabled(True)
+            self.uic.cb_colortype.setDisabled(True)
+        else:
+            self.uic.cb_sizetype.setDisabled(False)
+            self.uic.cb_colortype.setDisabled(False)
+
+    def list_sizetype(self):
+        t = ['1', '2']
+        self.uic.cb_sizetype.addItems(t)
+
+    def list_colortype(self):
+        t = ['1', '2']
+        self.uic.cb_colortype.addItems(t)
+
+    def teaching_mode(self):
+        if self.uic.rbutton_new.isChecked():
+            self.uic.btn_savepoint.setDisabled(False)
+            self.uic.txt_info_teaching.setText(my_database.get_table_comment())
+        else:
+            self.uic.btn_savepoint.setDisabled(True)
+
+    @staticmethod
+    def re_text(dic):
+        text = "[/point/, /size/, /color/, /x/, /y/, /z/]"
+        for unit in dic:
+            text = text + '\n' + str(unit)
+        return text
+
+    @staticmethod
+    def reset_point():
+        my_database.delete_on_database()
+
+    def save_point(self):
+        self.uic.btn_savepoint.setDisabled(True)
+        self.uic.rbutton_new.setChecked(False)
+        _p = self.uic.cb_point.currentText()
+        _size = self.uic.cb_sizetype.currentText()
+        _color = self.uic.cb_colortype.currentText()
+        if _p == "P00":
+            _size = '0'
+            _color = '0'
+        _x = self.uic.txt_cX.toPlainText()
+        _y = self.uic.txt_cY.toPlainText()
+        _z = self.uic.txt_cZ.toPlainText()
+        my_database.save_into_database(_p, _size, _color, _x, _y, _z)
+        if not _x and not _y and not _z:
+            try:
+                my_database.save_into_database(_p, _size, _color, _x, _y, _z)
+            except:
+                my_database.update_into_database(_p, _size, _color, _x, _y, _z)
+            self.uic.txt_info_teaching.setText(self.re_text(my_database.read_from_database()))
+        else:
+            self.msg.setIcon(QMessageBox.Warning)
+            self.msg.setText("Check your teaching point")
+            self.msg.setWindowTitle("Error")
+            self.msg.setStandardButtons(QMessageBox.Ok)
+            self.msg.exec()
 
     # endregion
 
@@ -371,8 +475,8 @@ class MainWindow:
 
     # endregion
 
-    # region on/off camera
-    def start(self):
+    # region camera detection and robotic control
+    def start_cam(self):
         icon1, icon2 = QIcon(), QIcon()
         icon1.addFile(u"turn_on.PNG", QSize(), QIcon.Normal, QIcon.Off)
         icon2.addFile(u"turn_off.PNG", QSize(), QIcon.Normal, QIcon.Off)
@@ -383,6 +487,13 @@ class MainWindow:
                 self.uic.btn_start.setText(" Stop Cam")
                 self.isOpenCam = True
         else:
+            if self.isCalibMode:
+                self.msg.setIcon(QMessageBox.Warning)
+                self.msg.setText("Calib mode is online")
+                self.msg.setWindowTitle("Error")
+                self.msg.setStandardButtons(QMessageBox.Ok)
+                self.msg.exec()
+                return
             if mycam.disconnect_cam():
                 self.uic.btn_start.setIcon(icon1)
                 self.uic.btn_start.setIconSize(QSize(40, 40))
@@ -397,24 +508,48 @@ class MainWindow:
                         self.uic.size_view.clear()
                         self.uic.logo_view.clear()
                         break
+
+                    # -> detect frames
                     image = mycam.get_frames()
                     obj, logo = models_process.detect_object(image)
                     if models_process.isObj:
-                        size = models_process.detect_size_color(image)
-                        size = cv2.resize(size, (500, 350), interpolation=cv2.INTER_LINEAR)
-                        size = QImage(size, size.shape[1], size.shape[0], QImage.Format_BGR888)
-                        self.uic.size_view.setPixmap(QPixmap.fromImage(size))
-                        models_process.elogo = logo
+                        size, result1, result2, center_x, center_y = models_process.detect_size_color(image)
+                        size = self.convert_cv_qt(size, 550, 375)
+                        self.uic.size_view.setPixmap(size)
+                        elogo, result3 = models_process.detect_elogo(logo)
+                        elogo = self.convert_cv_qt(elogo, 360, 300)
+                        self.uic.logo_view.setPixmap(elogo)
+                        self.detect_result = [result1, result2, result3]
+                        self.center_result = [center_x, center_y]
                     else:
                         models_process.prob.reset_bel()
-                    obj = cv2.resize(obj, (500, 350), interpolation=cv2.INTER_LINEAR)
-                    obj = QImage(obj, obj.shape[1], obj.shape[0], QImage.Format_BGR888)
-                    self.uic.obj_view.setPixmap(QPixmap.fromImage(obj))
-                    elogo = models_process.logo
-                    if elogo:
-                        elogo = cv2.resize(elogo, (300, 280), interpolation=cv2.INTER_LINEAR)
-                        elogo = QImage(elogo, elogo.shape[1], elogo.shape[0], QImage.Format_BGR888)
-                        self.uic.logo_view.setPixmap(QPixmap.fromImage(elogo))
+                    obj = self.convert_cv_qt(obj, 550, 375)
+                    self.uic.obj_view.setPixmap(obj)
+
+                    # -> control mode on
+                    if self.isAutoMode:
+                        """ 
+                        when robot is available, then send center of robot coordinate:
+                        - step 1: if isObj is true, check robot is available ? by read the buffer.
+                        - step 2: if yes, check detect result (size, color, logo) ?
+                        - step 3: if one of detect result is error, back step 1, else next step.
+                        - step 4: convert center x, center y to robot coordinate (pick place).
+                        - step 5: validate drop place from dict (type, coordinate).
+                        - step 6: inverse kinematic pick place and drop place.
+                        - step 7: send that points to mcu, set robot unavailable.
+                        
+                        when robot is unavailable, and there is a object which is seen, then adjust the velocity of
+                        conveyor motor.
+                        - case 1: check if isObj is False, set default velocity.
+                        - case 2: check if isObj is true, and robot is unavailable, adjust the velocity.
+                        - case 3: check if isObj is true, and robot is available, set default velocity.
+                        """
+                        if models_process.isObj:
+                            # read buffer -> validate robot is available?
+                            pass
+                        else:
+                            # set default velocity
+                            pass
 
                 if not self.isOpenCam:
                     self.uic.obj_view.clear()
@@ -426,11 +561,16 @@ class MainWindow:
 
         display_thread = threading.Thread(target=display)
         display_thread.start()
-        logo_detect_thread = threading.Thread(target=models_process.detect_elogo)
-        logo_detect_thread.start()
 
     def calib_model_mode(self):
         if self.uic.btn_calib_mode.text() == "On Mode":
+            if not self.isOpenCam:
+                self.msg.setIcon(QMessageBox.Warning)
+                self.msg.setText("Check your Camera")
+                self.msg.setWindowTitle("Error")
+                self.msg.setStandardButtons(QMessageBox.Ok)
+                self.msg.exec()
+                return
             self.uic.btn_calib_size.setDisabled(False)
             self.uic.btn_test_size.setDisabled(False)
             self.uic.btn_calib_mode.setText("Off Mode")
@@ -443,12 +583,127 @@ class MainWindow:
 
         def display():
             while self.isCalibMode:
-                image = mycam.get_frames()
-                img_org, img_contour = preprocessing_img(image)
-                img, _, d1, d2, d3 = find_features(img_org, img_contour)
+                if self.isOpenCam:
+                    image = mycam.get_frames()
+                    img_org, img_contour = preprocessing_img(image)
+                    img, _, d1, d2, d3 = find_features(img_org, img_contour)
+                    size = self.convert_cv_qt(img, 550, 375)
+                    self.uic.size_view.setPixmap(size)
+                    if self.isCalib:
+                        self.isCalib = False
+                        size_calib.convert(d1, d2, d3)
+                        models_process.cf1 = size_calib.cf1
+                        models_process.cf2 = size_calib.cf2
+                        models_process.cf3 = size_calib.cf3
+                        print(models_process.cf1, models_process.cf2, models_process.cf3)
+
+                    if self.isTestCalib:
+                        self.isTestCalib = False
+                        result = size_calib.test(d1, d2, d3)
+                        print(result)
+
+            if not self.isCalibMode:
+                self.uic.size_view.clear()
 
         display_thread = threading.Thread(target=display)
         display_thread.start()
+
+    def is_calib(self):
+        self.isCalib = True
+
+    def is_test_calib(self):
+        self.isTestCalib = True
+
+    @staticmethod
+    def convert_cv_qt(cv_img, dis_width, dis_height):
+        h, w, ch = cv_img.shape
+        bytes_per_line = ch * w
+        qt_format = QImage(cv_img.data, w, h, bytes_per_line, QImage.Format_BGR888)
+        p = qt_format.scaled(dis_width, dis_height, Qt.KeepAspectRatio)
+        return QPixmap.fromImage(p)
+
+    @staticmethod
+    def calib_camera():
+        pass
+
+    @staticmethod
+    def convert_robot_coordinate():
+        pass
+
+    @staticmethod
+    def validate_robot_available():
+        pass
+
+    # endregion
+
+    # region run auto mode
+    def convert_teaching_data(self):
+        table = my_database.read_from_database()
+        """ example: 
+            {(1, 1): "P01"} --- type_dict
+            {"P01": [5, 10, 10]} --- coordinate_dict
+        """
+        if table:
+            for row in table:
+                self.type_dict.update({(row[1], row[2]): row[0]})
+                self.coordinate_dict.update({row[0]: [row[3], row[4], row[5]]})
+            return 1
+        return 0
+
+    def run(self):
+        # read teaching point from database, if not find data, return false mode
+        if not self.convert_teaching_data():
+            self.msg.setIcon(QMessageBox.Warning)
+            self.msg.setText("Check your teaching point")
+            self.msg.setWindowTitle("Error")
+            self.msg.setStandardButtons(QMessageBox.Ok)
+            self.msg.exec()
+            self.isAutoMode = False
+            return
+
+        # setup properties
+        self.uic.btn_run.setDisabled(True)
+        self.uic.btn_stop.setDisabled(False)
+        self.uic.light_stt_2.setStyleSheet(
+            "background: rgb(51,255,51); border-radius:35px; border-color: rgb(0, 0, 0); "
+            "border-width : 1px; border-style:inset;")
+        self.uic.text_stt_2.setText('Status: On')
+
+        # validate robot is available ? by asking mcu
+        # .....send buffer
+
+        # run conveyor motor
+        # .....send buffer
+
+        # on mode
+        self.isAutoMode = True
+
+    def stop(self):
+        self.uic.btn_run.setDisabled(False)
+        self.uic.btn_stop.setDisabled(True)
+        self.uic.btn_reset.setDisabled(False)
+        self.uic.light_stt_2.setStyleSheet(
+            "background: rgb(255,0,0); border-radius:35px; border-color: rgb(0, 0, 0); "
+            "border-width : 1px; border-style:inset;")
+        self.uic.text_stt_2.setText('Status: Off')
+
+        # stop conveyor motor
+        # .....send buffer
+
+        # off mode
+        self.isAutoMode = False
+
+    def reset(self):
+        self.uic.btn_run.setDisabled(False)
+        self.uic.btn_stop.setDisabled(True)
+        self.uic.btn_reset.setDisabled(True)
+        self.uic.light_stt_2.setStyleSheet(
+            "background: rgb(255,255,0); border-radius:35px; border-color: rgb(0, 0, 0); "
+            "border-width : 1px; border-style:inset;")
+        self.uic.text_stt_2.setText('Status: Reset')
+
+        # robot go home
+        self.home()
 
     # endregion
 

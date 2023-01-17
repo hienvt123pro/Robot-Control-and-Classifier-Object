@@ -65,11 +65,11 @@ def find_features(img_org, img_contour):
 
                 # find peak of 3 parts of object
                 # part 1
-                x1, y1 = cal_dist(center, cor_part1, choose="max")
+                x1, y1 = cal_dist(center, cor_part1, option="max")
                 # part 2
-                x2, y2 = cal_dist(center, cor_part2, choose="min")
+                x2, y2 = cal_dist(center, cor_part2, option="min")
                 # part 3
-                x3, y3 = cal_dist(center, cor_part3, choose="max")
+                x3, y3 = cal_dist(center, cor_part3, option="max")
 
                 # 3 features
                 d1 = math.sqrt((x3 - x1) ** 2 + (y3 - y1) ** 2)
@@ -79,23 +79,21 @@ def find_features(img_org, img_contour):
                 cv2.line(img_org, (x1, y1), (x3, y3), (0, 0, 255), thickness=1)
                 cv2.line(img_org, (x1, y1), (x2, y2), (0, 0, 255), thickness=1)
                 cv2.line(img_org, (x2, y2), (x3, y3), (0, 0, 255), thickness=1)
-
-    except Exception as e:
-        print(e, '- undefined object!')
+    except:
         pass
 
     return img_org, center, d1, d2, d3
 
 
-def cal_dist(center, contours, choose):
-    if choose == "max":
+def cal_dist(center, contours, option):
+    if option == "max":
         D = cdist(contours, center)
         maxp = np.argmax(D)
         point = contours[maxp, :]
         x = point[0]
         y = point[1]
         return x, y
-    elif choose == "min":
+    elif option == "min":
         D = cdist(contours, center)
         minp = np.argmin(D)
         point = contours[minp, :]
