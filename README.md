@@ -1,4 +1,4 @@
-# Robot Control and Classifier Object
+# Robot Control and Object Classifier
 This is my capstone project.
 
 
