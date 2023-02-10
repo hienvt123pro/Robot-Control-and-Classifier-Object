@@ -9,6 +9,7 @@ from preprocessing import preprocessing_img
 from find_feature import find_features
 from database import my_database
 from calib_h import size_calib
+from robot_code import robocod
 import math
 import sys
 import threading
@@ -39,8 +40,8 @@ class MainWindow:
         self.d1 = 12.9
         self.a2 = 14
         self.a3 = 14
-        self.a4 = 5.5 - 0.5
-        self.a5 = 2.2 + 0.8
+        self.a4 = 5
+        self.a5 = 3
         self.Px = 0
         self.Py = 0
         self.Pz = 0
@@ -220,7 +221,6 @@ class MainWindow:
         _x = self.uic.txt_cX.toPlainText()
         _y = self.uic.txt_cY.toPlainText()
         _z = self.uic.txt_cZ.toPlainText()
-        my_database.save_into_database(_p, _size, _color, _x, _y, _z)
         if not _x and not _y and not _z:
             try:
                 my_database.save_into_database(_p, _size, _color, _x, _y, _z)
@@ -246,17 +246,17 @@ class MainWindow:
             self.msg.exec()
 
     def calib_J1(self):
-        self.buffer = "2,1,0,0,0,"
+        self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBJ1, data=None)
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
 
     def calib_J2(self):
-        self.buffer = "2,2,0,0,0,"
+        self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBJ2, data=None)
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
 
     def calib_J3(self):
-        self.buffer = "2,3,0,0,0,"
+        self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBJ3, data=None)
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
 
@@ -293,7 +293,7 @@ class MainWindow:
             self.msg.exec()
 
     def calib_home(self):
-        self.buffer = "2,4,0,0,0,"
+        self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBHOME, data=None)
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
         if self.isPortCnt:
@@ -387,7 +387,7 @@ class MainWindow:
 
     # endregion
 
-    # region moving configuration
+    # region speed configuration
     def set_speed(self):
         sp = self.uic.slide_speed.value()
         self.uic.txt_speed.setText(str(sp))
@@ -399,7 +399,7 @@ class MainWindow:
     def apply_conf(self):
         vel = self.uic.slide_speed.value()
         acc = self.uic.slide_acc.value()
-        self.buffer = "0" + "," + str(vel) + "," + str(acc) + "," + "0" + ',' + '0' + ','
+        self.buffer = robocod.concatenate(dev="1", cmd=robocod.SCON, data=[vel, acc, 0, 0, 0, 0])
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
 
@@ -419,7 +419,7 @@ class MainWindow:
 
     # region robot 3 dof kinematics
     def forwardKinematics(self, theta1, theta2, theta3):
-        self.buffer = "3" + "," + str(theta1) + "," + str(theta2) + "," + str(theta3) + ',' + '0' + ','
+        self.buffer = robocod.concatenate(dev="1", cmd=robocod.MOVE, data=[theta1, theta2, theta3, 0, 0, 0])
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
         if isSend:
@@ -459,7 +459,7 @@ class MainWindow:
         self.Pitch = 90
         self.Roll = 0
         self.Yaw = round(90 - self.theta1, 2)
-        self.buffer = "3" + "," + str(self.theta1) + "," + str(self.theta2) + "," + str(self.theta3) + ',' + '0' + ','
+        self.buffer = robocod.concatenate(dev="1", cmd=robocod.MOVE, data=[self.theta1, self.theta2, self.theta3, 0, 0, 0])
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
         if isSend:
@@ -534,7 +534,7 @@ class MainWindow:
                         - step 2: if yes, check detect result (size, color, logo) ?
                         - step 3: if one of detect result is error, back step 1, else next step.
                         - step 4: convert center x, center y to robot coordinate (pick place).
-                        - step 5: validate drop place from dict (type, coordinate).
+                        - step 5: validate drop place from dict (type, coordinate), if not find, raise error.
                         - step 6: inverse kinematic pick place and drop place.
                         - step 7: send that points to mcu, set robot unavailable.
                         
@@ -668,6 +668,19 @@ class MainWindow:
             "background: rgb(51,255,51); border-radius:35px; border-color: rgb(0, 0, 0); "
             "border-width : 1px; border-style:inset;")
         self.uic.text_stt_2.setText('Status: On')
+        self.uic.btn_move.setDisabled(True)
+        self.uic.btn_x_dec.setDisabled(True)
+        self.uic.btn_y_dec.setDisabled(True)
+        self.uic.btn_z_dec.setDisabled(True)
+        self.uic.btn_x_inc.setDisabled(True)
+        self.uic.btn_y_inc.setDisabled(True)
+        self.uic.btn_z_inc.setDisabled(True)
+        self.uic.btn_j1_dec.setDisabled(True)
+        self.uic.btn_j2_dec.setDisabled(True)
+        self.uic.btn_j3_dec.setDisabled(True)
+        self.uic.btn_j1_inc.setDisabled(True)
+        self.uic.btn_j2_inc.setDisabled(True)
+        self.uic.btn_j3_inc.setDisabled(True)
 
         # validate robot is available ? by asking mcu
         # .....send buffer
@@ -686,6 +699,19 @@ class MainWindow:
             "background: rgb(255,0,0); border-radius:35px; border-color: rgb(0, 0, 0); "
             "border-width : 1px; border-style:inset;")
         self.uic.text_stt_2.setText('Status: Off')
+        self.uic.btn_move.setDisabled(False)
+        self.uic.btn_x_dec.setDisabled(False)
+        self.uic.btn_y_dec.setDisabled(False)
+        self.uic.btn_z_dec.setDisabled(False)
+        self.uic.btn_x_inc.setDisabled(False)
+        self.uic.btn_y_inc.setDisabled(False)
+        self.uic.btn_z_inc.setDisabled(False)
+        self.uic.btn_j1_dec.setDisabled(False)
+        self.uic.btn_j2_dec.setDisabled(False)
+        self.uic.btn_j3_dec.setDisabled(False)
+        self.uic.btn_j1_inc.setDisabled(False)
+        self.uic.btn_j2_inc.setDisabled(False)
+        self.uic.btn_j3_inc.setDisabled(False)
 
         # stop conveyor motor
         # .....send buffer

@@ -37,8 +37,11 @@ class SerialCommunication:
     def receive_handler(self):
         while True:
             if self.port.isOpen():
-                if self.port.inWaiting():
-                    self.receive_buff = self.port.readline(5)
+                try:
+                    if self.port.inWaiting():
+                        self.receive_buff = self.port.readline(5)
+                except:
+                    break
 
 
 serialCom = SerialCommunication()
