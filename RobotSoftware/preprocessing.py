@@ -1,50 +1,60 @@
+"""
+Preprocessing image after detect object from yolov5 model
+Method: - mask the area of bounding-box object into green conveyor background
+        - use some image processing algorithm: otsu, canny, ... to threshold tho object
+        - condition: Brightness of environment is not too dark or too bright, then result of
+        preprocessing will be good
+"""
+
 import cv2
 import numpy as np
-import imutils
-
-# laplacian kernel
-kernel_laplacian = np.array([[0, 2, 0],
-                             [2, -8, 2],
-                             [0, 2, 0]])
+import joblib
 
 kernel_mean = 1 / 9 * np.array([[1, 1, 1],
                                 [1, 1, 1],
                                 [1, 1, 1]])
 
+CONVEYOR_BG_MASK = joblib.load('data/bg_mask.save')  # 640x480
 
-def preprocessing_img(img):
-    # resize image
-    img = imutils.resize(img, width=440, height=590)
-    img_org = img
 
-    # convert img RGB to gray
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+def preprocessing_img(img, bb: tuple, half_size=(320, 240)):
+    # resize the image
+    bb = (int(bb[0] * half_size[0] / img.shape[1]),
+          int(bb[1] * half_size[1] / img.shape[0]),
+          int(bb[2] * half_size[0] / img.shape[1]),
+          int(bb[3] * half_size[1] / img.shape[0]))
 
-    # median filtering
-    img_median = cv2.medianBlur(img_gray, 19)
+    img = cv2.resize(img, half_size)
+    img_org = img.copy()
 
-    # histogram equalization
-    img_equ = cv2.equalizeHist(img_median)
-    clahe = cv2.createCLAHE(clipLimit=3.2, tileGridSize=(2, 1))
-    img_high_contrast = clahe.apply(img_equ)
-    img_high_contrast = cv2.medianBlur(img_high_contrast, 25)
+    # mask the detected image to the bg mask
+    mask = np.zeros_like(img)
+    cv2.rectangle(mask, (bb[0], bb[1]), (bb[2], bb[3]), (255, 255, 255), -1)
+    masked_img = cv2.bitwise_and(img, mask)  # cut the obj from main img
+    mask_inv = cv2.bitwise_not(mask)
+    masked_conveyor_bg = cv2.bitwise_and(cv2.resize(CONVEYOR_BG_MASK, half_size), mask_inv)  # cut the bg
+    conveyor_with_obj = cv2.add(masked_conveyor_bg, masked_img)
 
-    # use laplacian to find detect edge
-    image_sharp = cv2.filter2D(src=img_median, ddepth=-1, kernel=kernel_laplacian)
+    # smoothing new masked image
+    conveyor_with_obj = cv2.filter2D(conveyor_with_obj, -1, kernel_mean)
 
-    # threshold edge
-    _, thresh_sharp = cv2.threshold(image_sharp, 30, 255, cv2.THRESH_BINARY)
+    # convert to gray image
+    img_gray = cv2.cvtColor(conveyor_with_obj, cv2.COLOR_BGR2GRAY)
 
-    # threshold object
-    _, thresh_object = cv2.threshold(img_high_contrast, 180, 255, cv2.THRESH_BINARY)
+    # threshold otsu and noise filter to split the object
+    _, thresh = cv2.threshold(img_gray, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    thresh = cv2.medianBlur(thresh, 37)
 
-    # full object image threshold
-    img_contour = thresh_object + thresh_sharp
+    # apply a Gaussian blur
+    blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
 
-    # mean filtering
-    img_contour = cv2.filter2D(img_contour, -1, kernel_mean)
+    # apply Canny edge detection to find the edge of the object
+    edges = cv2.Canny(blur, 50, 200)
 
-    # completed threshold object
-    _, img_contour = cv2.threshold(img_contour, 240, 255, cv2.THRESH_BINARY)
+    # combine thresh and edges and apply some filters to complete the output image
+    output_Step1 = cv2.bitwise_xor(thresh, edges)
+    output_Step2 = cv2.filter2D(output_Step1, -1, kernel_mean)
+    _, output_Step3 = cv2.threshold(output_Step2, 240, 255, cv2.THRESH_BINARY)
+    output_Step4 = cv2.medianBlur(output_Step3, 5)
 
-    return img_org, img_contour
+    return img_org, output_Step4

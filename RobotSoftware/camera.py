@@ -2,6 +2,9 @@ import cv2
 
 
 class MyCamera:
+    """
+    Provide functions for connect, disconnect, read frame of webcam or camera
+    """
     def __init__(self):
         self.vid = None
 
@@ -9,25 +12,17 @@ class MyCamera:
         try:
             if self.vid.isOpened():
                 self.vid.release()
-                cv2.destroyAllWindows()
         except:
             pass
 
     def connect_cam(self):
         self.vid = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-        if self.vid.isOpened():
-            return 1
-        else:
-            return 0
+        return self.vid.isOpened()
 
     def disconnect_cam(self):
         if self.vid.isOpened():
             self.vid.release()
-            cv2.destroyAllWindows()
-        if not self.vid.isOpened():
-            return 1
-        else:
-            return 0
+        return not self.vid.isOpened()
 
     def get_frames(self):
         if self.vid.isOpened():

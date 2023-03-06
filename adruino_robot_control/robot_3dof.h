@@ -29,7 +29,15 @@ class RobotControl{
   int stepZ = 4;
   int endZ = 11;
 
+  int relayAirMotor = 12;
+
+  float initX = 0;
+  float initY = 100;
+  float initZ = -130;
+
   public:
+  float intermediate_point[3];
+
   /// Constructor
   RobotControl(int vx, int ax, int vy, int ay, int vz, int az) {
     // setup pins for driver
@@ -66,6 +74,14 @@ class RobotControl{
     pinMode(endX, INPUT_PULLUP);
     pinMode(endY, INPUT_PULLUP);
     pinMode(endZ, INPUT_PULLUP);
+
+    // air motor
+    pinMode(relayAirMotor, OUTPUT);
+
+    // P00
+    intermediate_point[0] = 80;
+    intermediate_point[1] = 45;
+    intermediate_point[2] = -100;
   }
 
   /// Calibrate position for the robot, doing this before running.
@@ -109,7 +125,7 @@ class RobotControl{
     calibJ1();
     calibJ3();
     calibJ2();
-    robotGoto(0, 100, -130);
+    robotGoto(initX, initY, initZ);
   }
 
   /// Control the robot going to desired position 
@@ -130,24 +146,61 @@ class RobotControl{
 
   /// Setup velocity, accelerate for the robot
   void configSpeed(int v, int a) {
-    stepperX.setMaxSpeed(v);
     stepperX.setSpeed(v);
     stepperX.setAcceleration(a);
 
-    stepperY.setMaxSpeed(v);
     stepperY.setSpeed(v);
     stepperY.setAcceleration(a);
       
-    stepperZ.setMaxSpeed(v);
     stepperZ.setSpeed(v);
     stepperZ.setAcceleration(a);
   }
 
   /// The robot performs the process of picking and dropping objects
-  void robotAutoProcess(float pick_theta1, float pick_theta2, float pick_theta, float drop_theta1, float drop_theta2, float drop_theta3) {
+  void robotAutoProcess(float pick_theta1, float pick_theta2, float pick_theta3, float drop_theta1, float drop_theta2, float drop_theta3) {
+    // on air motor
+    airMotorControl(1);
+
+    // goto pick place
+    robotGoto(pick_theta1, pick_theta2, pick_theta3);
+    delay(300);
+
+    // goto P00
+    robotGoto(intermediate_point[0], intermediate_point[1], intermediate_point[2]);
+
+    // goto drop place
+    robotGoto(drop_theta1, drop_theta2, drop_theta3);
+
+    // off air motor and on valve solonoid
+    airMotorControl(0);
+    delay(2000);
+
+    // goto home
+    robotGoto(initX, initY, initZ);
+
+    // off valve solenoid
+
   }
 
+  /// Read the position of robot
+  bool currentPosition() {
+    // -3900, -1280, 2120: init steps of 3 step motor X, Y, Z
+    if ((stepperX.currentPosition()!=-3900)||(stepperY.currentPosition()!=-1280)||(stepperZ.currentPosition()!=2120)) {
+      return false;
+    }
+    else {
+      return true;
+    }
+  }
 
+  void airMotorControl(int button) {
+    if (button == 1) {
+      digitalWrite(relayAirMotor, HIGH);
+    }
+    else {
+      digitalWrite(relayAirMotor, LOW);
+    }
+  }
 
 };
 
