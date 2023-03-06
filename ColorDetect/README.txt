@@ -1,1 +1,1 @@
-CNN color model classifiers between: red and yellow color
+CNN color model classify between: red and yellow color
