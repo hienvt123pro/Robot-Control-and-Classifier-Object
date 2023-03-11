@@ -21,7 +21,7 @@ class ObjectProcess:
         self.obj_model.conf = 0.85
         self.obj_classes = self.obj_model.names
         self.bb = (0, 0, 0, 0)
-        self.waited_capture = joblib.load("data/logo_cap_wait.save")
+        self.waited_capture = cv2.imread("GUI/load_image.png")
 
     @staticmethod
     def yolov5_detect(I, model):

@@ -11,9 +11,11 @@ from preprocessing import preprocessing_img
 from database import my_database
 from calibration import size_calib, camera_calib
 from robot_code import robocod
+from predict_point import rfPoint
 import math
 import sys
 import threading
+import time
 
 
 class MainWindow:
@@ -41,6 +43,7 @@ class MainWindow:
         self.isTakeShot = False
         self.isCalibCam = False
         self.isTestCamCalibModel = False
+        self.isRunConveyor = False
 
         self.timer = QtCore.QTimer()
         self.timer.setInterval(1000)
@@ -87,10 +90,14 @@ class MainWindow:
         self.uic.btn_scrshot.setDisabled(True)
         self.uic.btn_calib_cam.setDisabled(True)
         self.uic.btn_save_model.setDisabled(True)
+        self.uic.txt_convey_sp_rf.setText("3")
 
         # endregion
 
         # region events
+        # even text edit
+        self.uic.txt_convey_sp_rf.textChanged.connect(self.sp_convey_changed)
+
         # event combo box
         self.uic.cb_com.activated.connect(self.list_ports())
         self.uic.cb_baudrate.activated.connect(self.list_baudrate())
@@ -100,6 +107,8 @@ class MainWindow:
         self.uic.cb_opt_calib_cam.activated.connect(self.list_opt_calib())
         self.uic.cb_opt_calib_cam.currentTextChanged.connect(self.changed_opt)
         self.uic.cb_calib_model.activated.connect(self.list_calibrated_model())
+        self.uic.cb_low_area.activated.connect(self.list_low_area())
+        self.uic.cb_high_area.activated.connect(self.list_high_area())
 
         # event push button
         self.uic.btn_cnt.clicked.connect(self.connection)
@@ -139,6 +148,7 @@ class MainWindow:
         self.uic.btn_apply_calib_model.clicked.connect(self.apply_calib_cam_model)
         self.uic.btn_on_cam_test.clicked.connect(self.test_calib_cam_model)
         self.uic.btn_end_effector.clicked.connect(self.end_effector)
+        self.uic.btn_apply_rf.clicked.connect(self.apply_rf_model)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
@@ -221,7 +231,7 @@ class MainWindow:
 
     @staticmethod
     def re_text(dic):
-        text = "| point | size | x | y | z |"
+        text = "|  point  |  size  |  x  |  y  |  z  |"
         for unit in dic:
             text = text + '\n' + str(unit)
         return text
@@ -410,15 +420,19 @@ class MainWindow:
     # region end-effector
     def end_effector(self):
         if self.uic.btn_end_effector.text() == "On":
-            self.uic.btn_end_effector.setText("Off")
             self.buffer = robocod.concatenate(dev="1", cmd=robocod.EFFECTOR, data=[1, 0, 0, 0, 0, 0])
             isSend = serialCom.send_data(self.buffer)
             self.check_sending(isSend)
+            if not isSend:
+                return
+            self.uic.btn_end_effector.setText("Off")
         else:
-            self.uic.btn_end_effector.setText("On")
             self.buffer = robocod.concatenate(dev="1", cmd=robocod.EFFECTOR, data=None)
             isSend = serialCom.send_data(self.buffer)
             self.check_sending(isSend)
+            if not isSend:
+                return
+            self.uic.btn_end_effector.setText("On")
 
     # endregion
 
@@ -616,6 +630,7 @@ class MainWindow:
                         break
 
                     # Detect frames
+                    start_time = time.time()
                     image = mycam.get_frames()
                     isObject, obj, logo, bbox = object_processing.obj_detector_process(image)
                     self.uic.obj_view.setPixmap(self.convert_cv_qt(obj, 600, 450))
@@ -633,7 +648,8 @@ class MainWindow:
                         self.detect_result = [size_result, color_result]
 
                         # convert 2D center to 3D center
-                        if self.label_size_results(size_result) == 4:
+                        inf, _ = self.label_results(size_result, color_result)
+                        if inf == 'error':
                             self.pick_place = (0, 0, 0)
                             self.drop_place = (0, 0, 0)
                         else:
@@ -647,17 +663,21 @@ class MainWindow:
 
                     else:
                         sz_color_processing.uncertain_algorithm.reset_bel()
-                        self.uic.logo_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 270, 280))
-                        self.uic.size_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 570, 450))
+                        self.uic.logo_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 200, 200))
+                        self.uic.size_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 400, 400))
 
                         # Giải phóng bộ nhớ của các hình ảnh và pixmap
                         del logo
                         del image
 
+                    end_time = time.time()
+                    runtime = end_time - start_time
+                    print("Thời gian chạy của model là:", runtime, "giây")
+
                     # Auto mode on
                     if self.isAutoMode:
                         """
-                        1. When robot is available, then send center of robot coordinate:
+                        When robot is available, then send center of robot coordinate:
                         - step 1: if isObj is true, check robot is available ? by read the buffer.
                         - step 2: if yes, check detect result (size, color, logo) ?
                         - step 3: if one of detect result is error, back step 1, else next step.
@@ -665,27 +685,23 @@ class MainWindow:
                         - step 5: validate drop place from dict (type, coordinate), if not find, raise error.
                         - step 6: inverse kinematic pick place and drop place.
                         - step 7: send that points to mcu, set robot unavailable.
-
-                        2. When robot is unavailable, and there is a object which is seen, then adjust the velocity of
-                        conveyor motor.
-                        - case 1: check if isObj is False, set default velocity.
-                        - case 2: check if isObj is true, and robot is unavailable, adjust the velocity.
-                        - case 3: check if isObj is true, and robot is available, set default velocity.
                         """
                         if isObject:
                             # read buffer -> validate robot is available?
                             if self.isRobotAvailable:
                                 # checking center point (pick place) is in range of conveyor work-place
-                                if self.pick_place[0] > 18:  # x-coor > 18 (centimeters)
-
-                                    # tracking center point (pick place) algorithm
-                                    # ..................
-
+                                if self.pick_place[0] > 18:  # x_coor > 18 (centimeters)
                                     # check the object is not error
-                                    check_index = self.label_size_results(self.detect_result[0])
-                                    if check_index != 4:
+                                    _, index = self.label_results(self.detect_result[0], self.detect_result[1])
+                                    if index != 4:
+                                        # predicting center point (pick place) depend on machine learning algorithm
+                                        if self.isRunConveyor:
+                                            y_new = rfPoint.predict_new_point(self.pick_place[1],
+                                                                              rfPoint.AVERAGE_SYS_DELAY_TIME)
+                                            self.pick_place = (self.pick_place[0], y_new, self.pick_place[2])
+
                                         # validate the drop place
-                                        teaching_point = self.type_dict.get(check_index)
+                                        teaching_point = self.type_dict.get(index)
                                         self.drop_place = tuple(self.coordinate_dict.get(teaching_point))
 
                                         # inverse kinematic pick place and drop place
@@ -718,6 +734,7 @@ class MainWindow:
             self.uic.btn_calib_mode.setText("Off Mode")
             self.uic.btn_calib_mode.setStyleSheet("background: rgb(0,255,0);")
             self.uic.btn_start.setDisabled(True)
+            self.uic.lb_info.setText("Start calibrating size model\nInsert standard size 16 object")
         else:
             self.isCalibSizeModelMode = False
             self.uic.btn_calib_size.setDisabled(True)
@@ -725,6 +742,7 @@ class MainWindow:
             self.uic.btn_calib_mode.setText("On Mode")
             self.uic.btn_calib_mode.setStyleSheet("background: rgb(235,235,235);")
             self.uic.btn_start.setDisabled(False)
+            self.uic.lb_info.setText("Stop calibrating size model\nRestart camera to detect")
 
         def display():
             try:
@@ -766,11 +784,11 @@ class MainWindow:
 
     def is_calib(self):
         self.isSizeCalibModel = True
-        self.uic.lb_info.setText("Calibrate size model")
+        self.uic.lb_info.setText("Calibrated")
 
     def is_test_calib(self):
         self.isTestCalibSizeModel = True
-        self.uic.lb_info.setText("Test new size calibration model")
+        self.uic.lb_info.setText("Test new calibrated model")
 
     @staticmethod
     def convert_cv_qt(cv_img, dis_width, dis_height):
@@ -810,9 +828,12 @@ class MainWindow:
             serialCom.receive_buff = b'00000'
 
     @staticmethod
-    def label_size_results(size):
+    def label_results(size, color):
         size_dict = {'size16': 1, 'size18': 2, 'size20': 3, 'error': 4}
-        return size_dict.get(size, None)
+        color_dict = {'red': 0, 'yellow': 1, 'error': 2}
+        if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2:
+            return 'error', 4
+        return 'not error', size_dict.get(size, None)
 
     # endregion
 
@@ -851,6 +872,8 @@ class MainWindow:
                                                                                       coor00[0][2], 0, 0, 0])
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
+        if not isSend:
+            return
 
         if not self.isOpenCam:
             self.msg.setIcon(QMessageBox.Warning)
@@ -861,10 +884,12 @@ class MainWindow:
             return
 
         # validate robot is available ? by asking mcu
-        # .....send buffer
+        # .....send buffer and validate
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CHECK_STATE, data=None)
         isSend = serialCom.send_data(self.buffer)
         self.check_sending(isSend)
+        if not isSend:
+            return
 
         if isSend:
             if serialCom.receive_buff[3] == 1:
@@ -884,6 +909,7 @@ class MainWindow:
 
         # run conveyor motor
         # .....send buffer
+        self.isRunConveyor = True
 
         # on auto mode
         self.isAutoMode = True
@@ -997,8 +1023,8 @@ class MainWindow:
                 self.uic.btn_calib_cam.setDisabled(False)
                 self.uic.cb_opt_calib_cam.setDisabled(True)
                 self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(0,255,0);")
-                check_img_dir, check_calib_dir = camera_calib.check_dir()
-                self.uic.txt_info_calib_cam.setText(check_img_dir + "; " + check_calib_dir + " is found")
+                _, _ = camera_calib.check_dir()
+                self.uic.txt_info_calib_cam.setText("Start the calibration process")
                 self.isCalibCamMode = True
         else:
             self.isCalibCamMode = False
@@ -1010,6 +1036,7 @@ class MainWindow:
                 self.uic.cb_opt_calib_cam.setDisabled(False)
                 self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(235,235,235);")
                 self.uic.calib_cam_view.clear()
+                self.uic.txt_info_calib_cam.setText("Stop the calibration process")
 
         def display():
             try:
@@ -1129,6 +1156,29 @@ class MainWindow:
 
     def set_num_points(self):
         return self.uic.slide_points_test.value()
+
+    # endregion
+
+    # region conveyor speed
+    def list_low_area(self):
+        it = ["-10", "-8", "-6", "-4", "-2", "0"]
+        self.uic.cb_low_area.addItems(it)
+        self.uic.cb_low_area.setCurrentIndex(3)
+
+    def list_high_area(self):
+        it = ["0", "2", "4", "6", "8", "10"]
+        self.uic.cb_high_area.addItems(it)
+        self.uic.cb_high_area.setCurrentIndex(2)
+
+    def apply_rf_model(self):
+        rfPoint.CONVEYOR_VELOCITY = int(self.uic.txt_convey_sp_rf.toPlainText())
+        rfPoint.create_new_model()
+        self.uic.txt_info_convey_rf.setText("Applied!")
+        self.uic.txt_info_convey_rf.setStyleSheet("background: rgb(0,255,0);")
+
+    def sp_convey_changed(self):
+        self.uic.txt_info_convey_rf.clear()
+        self.uic.txt_info_convey_rf.setStyleSheet("background: transparent")
 
     # endregion
 
