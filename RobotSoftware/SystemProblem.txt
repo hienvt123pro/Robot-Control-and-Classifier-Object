@@ -5,3 +5,9 @@ Error when robot picking object, some reasons is:
   - error in robot calibration, the reference angles cannot be calculated with absolute precision.
   - intrinsic error in robot (structure of the robot).
   - error in object tracking algorithm
+
+
+pyinstaller --onefile --add-data "calibration.py;." --add-data "camera.py;." --add-data "communicate.py;." --add-data "database.py;." -
+-add-data "detect.py;." --add-data "find_feature.py;." --add-data "load_model_json.py;." --add-data "predict_point.py;." --add-data "preprocessing.py;." --add-data "robot_code.py;." --
+add-data "size_uncertainty.py;."  main.py
+

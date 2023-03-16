@@ -15,7 +15,7 @@ from predict_point import rfPoint
 import math
 import sys
 import threading
-import time
+# import time
 
 
 class MainWindow:
@@ -34,6 +34,7 @@ class MainWindow:
         self.product_result = ['']
         self.center_result = [0, 0, 1]
         self.pick_place = tuple([0, 0, 0])
+        self.temp_pick_place = tuple([0, 0, 0])
         self.drop_place = tuple([0, 0, 0])
         self.type_dict = {}
         self.coordinate_dict = {}
@@ -630,7 +631,7 @@ class MainWindow:
                         break
 
                     # Detect frames
-                    start_time = time.time()
+                    # start_time = time.time()
                     image = mycam.get_frames()
                     isObject, obj, logo, bbox = object_processing.obj_detector_process(image)
                     self.uic.obj_view.setPixmap(self.convert_cv_qt(obj, 600, 450))
@@ -653,7 +654,10 @@ class MainWindow:
                             self.pick_place = (0, 0, 0)
                             self.drop_place = (0, 0, 0)
                         else:
-                            self.pick_place = camera_calib.findPerspective3DCoors(self.center_result)
+                            if not self.isAutoMode:
+                                self.pick_place = camera_calib.findPerspective3DCoors(self.center_result)
+                            else:
+                                self.temp_pick_place = camera_calib.findPerspective3DCoors(self.center_result)
 
                         # Giải phóng bộ nhớ của các hình ảnh và pixmap
                         del size
@@ -670,9 +674,8 @@ class MainWindow:
                         del logo
                         del image
 
-                    end_time = time.time()
-                    runtime = end_time - start_time
-                    print("Thời gian chạy của model là:", runtime, "giây")
+                    # end_time = time.time()
+                    # print("Thời gian chạy của model là:", end_time - start_time, "giây")
 
                     # Auto mode on
                     if self.isAutoMode:
@@ -690,13 +693,13 @@ class MainWindow:
                             # read buffer -> validate robot is available?
                             if self.isRobotAvailable:
                                 # checking center point (pick place) is in range of conveyor work-place
-                                if self.pick_place[0] > 18:  # x_coor > 18 (centimeters)
+                                if 18 < self.pick_place[0] < 24:  # 18 < x_coor < 24 (centimeters)
                                     # check the object is not error
                                     _, index = self.label_results(self.detect_result[0], self.detect_result[1])
                                     if index != 4:
                                         # predicting center point (pick place) depend on machine learning algorithm
                                         if self.isRunConveyor:
-                                            y_new = rfPoint.predict_new_point(self.pick_place[1],
+                                            y_new = rfPoint.predict_new_point(self.temp_pick_place[1],
                                                                               rfPoint.AVERAGE_SYS_DELAY_TIME)
                                             self.pick_place = (self.pick_place[0], y_new, self.pick_place[2])
 

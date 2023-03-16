@@ -15,8 +15,8 @@ class RandomForestPredictPoint:
     def __init__(self):
         self.CONVEYOR_VELOCITY = 3  # (cm/sec)
         self.T_ROBOT = 2  # time robot down (sec)
-        self.T_DELAY = 0.15 + 0.0155  # time_detect + time_run_rf (sec)
-        self.AVERAGE_SYS_DELAY_TIME = 2.1655  # (sec)
+        self.T_DELAY = 0.28 + 0.0155  # time_detect + time_run_rf (sec)
+        self.AVERAGE_SYS_DELAY_TIME = 2.2955  # (sec)
         self.LOW_WORKING_Y_AREA = -4  # (cm)
         self.HIGH_WORKING_Y_AREA = 4  # (cm)
         self.SAMPLES_DIM = 200
@@ -26,12 +26,12 @@ class RandomForestPredictPoint:
 
     def predict_new_point(self, y_init_point, sys_delay_time):
         y_future_point = self.rfmodel.predict(np.array([[y_init_point, sys_delay_time]]))
-        return y_future_point[0]
+        return round(y_future_point[0], 2)
 
     def create_new_model(self):
         conveyor_velocity_norm = np.random.normal(loc=self.CONVEYOR_VELOCITY, scale=0.1, size=self.SAMPLES_DIM)
         time_robot_norm = np.random.normal(loc=self.T_ROBOT, scale=0.2, size=self.SAMPLES_DIM)
-        time_delay_norm = np.random.normal(loc=self.T_DELAY, scale=0.05, size=self.SAMPLES_DIM)
+        time_delay_norm = np.random.normal(loc=self.T_DELAY, scale=0.5, size=self.SAMPLES_DIM)
 
         total_delay_time = time_robot_norm + time_delay_norm
         y_current = np.random.uniform(low=self.LOW_WORKING_Y_AREA, high=self.HIGH_WORKING_Y_AREA, size=(self.SAMPLES_DIM,))

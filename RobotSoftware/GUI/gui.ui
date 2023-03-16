@@ -39,7 +39,7 @@
      <string notr="true">background-color: qlineargradient(spread:pad, x1:0.03, y1:0.955, x2:1, y2:0, stop:0 rgba(175, 175, 175, 57), stop:1 rgba(255, 255, 255, 255))</string>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>2</number>
     </property>
     <property name="iconSize">
      <size>
@@ -3559,6 +3559,15 @@ border-style:inset;</string>
       </widget>
      </widget>
     </widget>
+    <widget class="QWidget" name="data_tab">
+     <attribute name="icon">
+      <iconset>
+       <normaloff>icon_data.png</normaloff>icon_data.png</iconset>
+     </attribute>
+     <attribute name="title">
+      <string>Data</string>
+     </attribute>
+    </widget>
     <widget class="QWidget" name="tools_tab">
      <attribute name="icon">
       <iconset>
@@ -4548,7 +4557,7 @@ p, li { white-space: pre-wrap; }
          <bool>true</bool>
         </property>
        </widget>
-       <widget class="QTextEdit" name="textEdit_3">
+       <widget class="QTextEdit" name="txt_setpoint_sp">
         <property name="geometry">
          <rect>
           <x>190</x>
@@ -4579,7 +4588,7 @@ p, li { white-space: pre-wrap; }
 &lt;p align=&quot;center&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;0&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
        </widget>
-       <widget class="QTextEdit" name="textEdit_5">
+       <widget class="QTextEdit" name="txt_pv_sp">
         <property name="geometry">
          <rect>
           <x>190</x>
@@ -4613,7 +4622,7 @@ p, li { white-space: pre-wrap; }
 &lt;p align=&quot;center&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;0&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
        </widget>
-       <widget class="QPushButton" name="pushButton_2">
+       <widget class="QPushButton" name="btn_run_convey">
         <property name="geometry">
          <rect>
           <x>140</x>
@@ -4694,7 +4703,7 @@ p, li { white-space: pre-wrap; }
          <set>Qt::AlignCenter</set>
         </property>
        </widget>
-       <widget class="QLabel" name="light_stt_conv_sp">
+       <widget class="QLabel" name="light_stt_convey_sp">
         <property name="geometry">
          <rect>
           <x>30</x>
@@ -5018,11 +5027,6 @@ p, li { white-space: pre-wrap; }
        </layout>
       </widget>
      </widget>
-    </widget>
-    <widget class="QWidget" name="widget">
-     <attribute name="title">
-      <string/>
-     </attribute>
     </widget>
    </widget>
   </widget>
