@@ -47,5 +47,10 @@ class SerialCommunication:
                     pass
 
 
-serialCom = SerialCommunication()
-receive_thread = threading.Thread(target=serialCom.receive_handler)
+# device 1
+serialCom1 = SerialCommunication()
+receive_thread_1 = threading.Thread(target=serialCom1.receive_handler)
+
+# device 2
+serialCom2 = SerialCommunication()
+receive_thread_2 = threading.Thread(target=serialCom2.receive_handler)

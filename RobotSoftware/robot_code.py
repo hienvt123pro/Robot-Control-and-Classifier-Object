@@ -1,6 +1,6 @@
 """
 Custom data communication protocol setting with structure:
-Bit       ||       function       ||       value
+Byte      ||       function       ||       value
 0                  (start)                 0
 1                  (dev)                   1 or 2
 2                  (cmd)                   ...
@@ -35,6 +35,9 @@ class RobotCode:
         self.PROCESS_MOVE = "4,0,"
         self.SET_INTER_POINT = "5,0,"
         self.EFFECTOR = '6,0,'
+        self.RUNCONVEY = '7,0,'
+        self.STOPCONVEY = "7,1,"
+        self.READSPEED = "8,0,"
 
     def concatenate(self, dev: str, cmd: str, data: list):
         if not data:

@@ -30,6 +30,7 @@ class RobotControl{
   int endZ = 11;
 
   int relayAirMotor = 12;
+  int solenoid = 13;
 
   float initX = 0;
   float initY = 100;
@@ -40,6 +41,7 @@ class RobotControl{
 
   /// Constructor
   RobotControl(int vx, int ax, int vy, int ay, int vz, int az) {
+
     // setup pins for driver
     pinMode(en, OUTPUT);
     digitalWrite(en, LOW);
@@ -77,6 +79,7 @@ class RobotControl{
 
     // air motor
     pinMode(relayAirMotor, OUTPUT);
+    pinMode(solenoid, OUTPUT);
 
     // P00
     intermediate_point[0] = 80;
@@ -173,17 +176,19 @@ class RobotControl{
 
     // off air motor and on valve solonoid
     airMotorControl(0);
-    delay(2000);
+    valveSolenoid(1);
+    delay(600);
 
     // goto home
     robotGoto(initX, initY, initZ);
 
     // off valve solenoid
+    valveSolenoid(0);
 
   }
 
   /// Read the position of robot
-  bool currentPosition() {
+  bool isHomePosition() {
     // -3900, -1280, 2120: init steps of 3 step motor X, Y, Z
     if ((stepperX.currentPosition()!=-3900)||(stepperY.currentPosition()!=-1280)||(stepperZ.currentPosition()!=2120)) {
       return false;
@@ -199,6 +204,15 @@ class RobotControl{
     }
     else {
       digitalWrite(relayAirMotor, LOW);
+    }
+  }
+
+  void valveSolenoid(int button) {
+    if (button == 1) {
+      digitalWrite(solenoid, HIGH);
+    }
+    else {
+      digitalWrite(solenoid, LOW);
     }
   }
 

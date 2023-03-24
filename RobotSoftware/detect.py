@@ -18,7 +18,7 @@ class ObjectProcess:
     def __init__(self):
         self.obj_model = torch.hub.load('ultralytics/yolov5', 'custom', path='models/obj.pt', force_reload=True)
         self.obj_model.iou = 0.5
-        self.obj_model.conf = 0.85
+        self.obj_model.conf = 0.83
         self.obj_classes = self.obj_model.names
         self.bb = (0, 0, 0, 0)
         self.waited_capture = cv2.imread("GUI/load_image.png")
@@ -87,7 +87,7 @@ class SizeAndColorProcess:
 
         # threshold for performance
         self.SIZE_MODEL_THRESHOLD = 0.5
-        self.COLOR_MODEL_THRESHOLD = 0.65
+        self.COLOR_MODEL_THRESHOLD = 0.5
 
     # result functions for size and color model
     @staticmethod
@@ -117,7 +117,7 @@ class SizeAndColorProcess:
         # calib features
         d1, d2, d3 = d1 * self.cf1, d2 * self.cf2, d3 * self.cf3
 
-        size, color = 'error', 'error'
+        size, color = '', ''
         cX, cY = 0, 0
 
         if d1 == 0:
@@ -140,6 +140,7 @@ class SizeAndColorProcess:
             color = self.color_result(y_pred)
             if predict_color[0, y_pred] < self.COLOR_MODEL_THRESHOLD:
                 color = 'error'
+
         except Exception as e:
             print(e, "-unclear object")
 

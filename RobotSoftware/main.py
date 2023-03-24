@@ -1,9 +1,9 @@
-from PySide2.QtWidgets import QApplication, QMainWindow, QMessageBox
+from PySide2.QtWidgets import QApplication, QMainWindow, QMessageBox, QGraphicsPixmapItem, QGraphicsScene
 from PySide2.QtGui import QIcon, QImage, QPixmap
 from PySide2.QtCore import QSize, Qt
 from PySide2 import QtCore
 from GUI import gui
-from communicate import serialCom, receive_thread
+from communicate import serialCom1, receive_thread_1, serialCom2, receive_thread_2
 from camera import mycam
 from detect import SizeAndColorProcess, ObjectProcess
 from find_feature import find_features
@@ -15,6 +15,8 @@ from predict_point import rfPoint
 import math
 import sys
 import threading
+import matplotlib.pyplot as plt
+
 # import time
 
 
@@ -25,19 +27,20 @@ class MainWindow:
         self.uic.setupUi(self.Control_UI)
         self.msg = QMessageBox()
         self.buffer = "0,0,0,0,0,0,0,0,0,0,0"
-        self.isPortCnt = False
+        self.isPortsCnt = False
         self.isOpenCam = False
         self.isCalibSizeModelMode = False
         self.isSizeCalibModel = False
         self.isTestCalibSizeModel = False
         self.detect_result = ['', '']
-        self.product_result = ['']
+        self.product_result = ''
         self.center_result = [0, 0, 1]
         self.pick_place = tuple([0, 0, 0])
         self.temp_pick_place = tuple([0, 0, 0])
         self.drop_place = tuple([0, 0, 0])
         self.type_dict = {}
         self.coordinate_dict = {}
+        self.index_type = 0
         self.isAutoMode = False
         self.isRobotAvailable = False
         self.isCalibCamMode = False
@@ -45,10 +48,25 @@ class MainWindow:
         self.isCalibCam = False
         self.isTestCamCalibModel = False
         self.isRunConveyor = False
+        self.isReadSpeedMode = False
+        self.isApplyRF = False
 
+        # timer interrupt
         self.timer = QtCore.QTimer()
         self.timer.setInterval(1000)
-        self.timer.timeout.connect(self.update_result)
+        self.timer.timeout.connect(self.update_results)
+
+        # PID graph setting
+        self.scene = QGraphicsScene()
+        self.uic.graphicsView.setScene(self.scene)
+        self.x, self.t = [], 0
+        self.y_pv, self.y_sp = [], []
+        self.fig = plt.figure()
+        self.fig.set_size_inches(550/100, 360/90)
+        plt.xlabel('time (s)')
+        plt.ylabel('speed conveyor (cm/s)')
+        plt.title("PID Control")
+        plt.ylim([0, 10])
 
         # region robot params
         self.d1 = 12.9
@@ -97,10 +115,11 @@ class MainWindow:
 
         # region events
         # even text edit
-        self.uic.txt_convey_sp_rf.textChanged.connect(self.sp_convey_changed)
+        self.uic.txt_setpoint_sp.textChanged.connect(self.sp_convey_changed)
 
         # event combo box
         self.uic.cb_com.activated.connect(self.list_ports())
+        self.uic.cb_com_2.activated.connect(self.list_ports())
         self.uic.cb_baudrate.activated.connect(self.list_baudrate())
         self.uic.cb_point.activated.connect(self.list_points())
         self.uic.cb_point.currentTextChanged.connect(self.changed_point)
@@ -150,6 +169,7 @@ class MainWindow:
         self.uic.btn_on_cam_test.clicked.connect(self.test_calib_cam_model)
         self.uic.btn_end_effector.clicked.connect(self.end_effector)
         self.uic.btn_apply_rf.clicked.connect(self.apply_rf_model)
+        self.uic.btn_run_convey.clicked.connect(self.run_conveyor)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
@@ -162,12 +182,18 @@ class MainWindow:
     # region port connection
     def list_ports(self):
         self.uic.cb_com.clear()
-        ports = serialCom.list_ports_name()
+        self.uic.cb_com_2.clear()
+        ports = serialCom1.list_ports_name()
         if not ports:
             self.uic.cb_com.addItem("not found")
+            self.uic.cb_com_2.addItem("not found")
+            return
+        name_ports = []
         for port in ports:
-            a = str(port)
-            self.uic.cb_com.addItem(a[:5])
+            p = str(port)
+            name_ports.append(p[:5])
+        self.uic.cb_com.addItems(list(set(name_ports)))
+        self.uic.cb_com_2.addItems(list(set(name_ports)))
 
     def list_baudrate(self):
         self.uic.cb_baudrate.addItem("115200")
@@ -175,12 +201,24 @@ class MainWindow:
     def connection(self):
         self.list_ports()
         if self.uic.btn_cnt.text() == "Connect":
-            port_name = self.uic.cb_com.currentText()
+            port_name_1 = self.uic.cb_com.currentText()
+            port_name_2 = self.uic.cb_com_2.currentText()
+            if port_name_1 == port_name_2:
+                self.msg.setIcon(QMessageBox.Warning)
+                self.msg.setText("Duplicate COM Ports at 2 device\nor ports are not available")
+                self.msg.setWindowTitle("Error")
+                self.msg.setStandardButtons(QMessageBox.Ok)
+                self.msg.exec()
+                return
+
             baudrate = self.uic.cb_baudrate.currentText()
-            self.isPortCnt = serialCom.connect(port_name=port_name, baud=baudrate)
-            if self.isPortCnt:
+            self.isPortsCnt = serialCom1.connect(port_name=port_name_1, baud=baudrate) and \
+                              serialCom2.connect(port_name=port_name_2, baud=baudrate)
+            if self.isPortsCnt:
                 try:
-                    receive_thread.start()  # start receive data from mcu thread
+                    # start receive data from mcu thread
+                    receive_thread_1.start()
+                    receive_thread_2.start()
                 except RuntimeError:
                     pass
                 self.uic.light_stt.setStyleSheet(
@@ -199,8 +237,9 @@ class MainWindow:
                 self.msg.setStandardButtons(QMessageBox.Ok)
                 self.msg.exec()
         else:
-            serialCom.disconnect()
-            self.isPortCnt = False
+            serialCom1.disconnect()
+            serialCom2.disconnect()
+            self.isPortsCnt = False
             self.uic.btn_cnt.setText("Connect")
             self.uic.text_stt.setText("Status: Off")
             self.uic.light_stt.setStyleSheet("background: rgb(255,0,0); border-radius:20px")
@@ -278,21 +317,21 @@ class MainWindow:
 
     def calib_J1(self):
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBJ1, data=None)
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
 
     def calib_J2(self):
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBJ2, data=None)
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
 
     def calib_J3(self):
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBJ3, data=None)
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
 
     def home(self):
-        if self.isPortCnt:
+        if self.isPortsCnt:
             self.forwardKinematics(theta1=self.robotHome[0], theta2=self.robotHome[1], theta3=self.robotHome[2])
             self.uic.txt_j1.setText(str(self.robotHome[0]))
             self.uic.txt_j2.setText(str(self.robotHome[1]))
@@ -325,9 +364,9 @@ class MainWindow:
 
     def calib_home(self):
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBHOME, data=None)
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
-        if self.isPortCnt:
+        if self.isPortsCnt:
             self.home()
 
     # endregion
@@ -422,14 +461,14 @@ class MainWindow:
     def end_effector(self):
         if self.uic.btn_end_effector.text() == "On":
             self.buffer = robocod.concatenate(dev="1", cmd=robocod.EFFECTOR, data=[1, 0, 0, 0, 0, 0])
-            isSend = serialCom.send_data(self.buffer)
+            isSend = serialCom1.send_data(self.buffer)
             self.check_sending(isSend)
             if not isSend:
                 return
             self.uic.btn_end_effector.setText("Off")
         else:
             self.buffer = robocod.concatenate(dev="1", cmd=robocod.EFFECTOR, data=None)
-            isSend = serialCom.send_data(self.buffer)
+            isSend = serialCom1.send_data(self.buffer)
             self.check_sending(isSend)
             if not isSend:
                 return
@@ -474,7 +513,7 @@ class MainWindow:
         vel = self.uic.slide_speed.value()
         acc = self.uic.slide_acc.value()
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.SCON, data=[vel, acc, 0, 0, 0, 0])
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
 
     # endregion
@@ -494,7 +533,7 @@ class MainWindow:
     # region robot 3 dof kinematics
     def forwardKinematics(self, theta1, theta2, theta3):
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.MOVE, data=[theta1, theta2, theta3, 0, 0, 0])
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
         if isSend:
             theta1 = round(float(theta1) * math.pi / 180, 2)
@@ -535,7 +574,7 @@ class MainWindow:
         self.Yaw = round(90 - self.theta1, 2)
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.MOVE,
                                           data=[self.theta1, self.theta2, self.theta3, 0, 0, 0])
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
         if isSend:
             self.uic.txt_j1.setText(str(self.theta1))
@@ -577,7 +616,7 @@ class MainWindow:
         """
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.PROCESS_MOVE,
                                           data=[pick[0], pick[1], pick[2], drop[0], drop[1], drop[2]])
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
 
     # endregion
@@ -609,7 +648,8 @@ class MainWindow:
                 self.isOpenCam = True
                 self.uic.lb_info.setText("Start detection models")
                 self.uic.res_size.setStyleSheet("background: rgb(255,255,255);")
-                self.timer.start()
+                if not self.timer.isActive():
+                    self.timer.start()
         else:
             self.isOpenCam = False
             if mycam.disconnect_cam():
@@ -638,7 +678,6 @@ class MainWindow:
                     if isObject:
                         size, size_result, color_result, center_x, center_y = sz_color_processing.detect_size_color(
                             image, bbox[0], bbox[1], bbox[2], bbox[3])
-
                         self.uic.size_view.setPixmap(self.convert_cv_qt(size, 600, 450))
 
                         # 2D center result of object
@@ -649,8 +688,8 @@ class MainWindow:
                         self.detect_result = [size_result, color_result]
 
                         # convert 2D center to 3D center
-                        inf, _ = self.label_results(size_result, color_result)
-                        if inf == 'error':
+                        self.product_result, self.index_type = self.result_of_product(size_result, color_result)
+                        if self.product_result == 'Error':
                             self.pick_place = (0, 0, 0)
                             self.drop_place = (0, 0, 0)
                         else:
@@ -659,7 +698,7 @@ class MainWindow:
                             else:
                                 self.temp_pick_place = camera_calib.findPerspective3DCoors(self.center_result)
 
-                        # Giải phóng bộ nhớ của các hình ảnh và pixmap
+                        # Free up memory of images and pixmap
                         del size
                         del obj
                         del logo
@@ -670,12 +709,12 @@ class MainWindow:
                         self.uic.logo_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 200, 200))
                         self.uic.size_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 400, 400))
 
-                        # Giải phóng bộ nhớ của các hình ảnh và pixmap
+                        # Free up memory of images and pixmap
                         del logo
                         del image
 
                     # end_time = time.time()
-                    # print("Thời gian chạy của model là:", end_time - start_time, "giây")
+                    # print("Time of models is:", end_time - start_time, "sec")
 
                     # Auto mode on
                     if self.isAutoMode:
@@ -689,22 +728,27 @@ class MainWindow:
                         - step 6: inverse kinematic pick place and drop place.
                         - step 7: send that points to mcu, set robot unavailable.
                         """
+
                         if isObject:
                             # read buffer -> validate robot is available?
                             if self.isRobotAvailable:
                                 # checking center point (pick place) is in range of conveyor work-place
-                                if 18 < self.pick_place[0] < 24:  # 18 < x_coor < 24 (centimeters)
+                                # 18 < 'x_coor' < 24 (centi) and 'y_coor' in working area of model RandomForest
+                                if 18 < self.temp_pick_place[0] < 24 and \
+                                        rfPoint.LOW_WORKING_Y_AREA < self.temp_pick_place[1] < rfPoint.HIGH_WORKING_Y_AREA:
                                     # check the object is not error
-                                    _, index = self.label_results(self.detect_result[0], self.detect_result[1])
-                                    if index != 4:
+                                    if self.product_result == "Not error":
                                         # predicting center point (pick place) depend on machine learning algorithm
-                                        if self.isRunConveyor:
+                                        if self.isRunConveyor and self.isApplyRF:
                                             y_new = rfPoint.predict_new_point(self.temp_pick_place[1],
                                                                               rfPoint.AVERAGE_SYS_DELAY_TIME)
                                             self.pick_place = (self.pick_place[0], y_new, self.pick_place[2])
+                                        else:
+                                            self.pick_place = self.temp_pick_place
 
                                         # validate the drop place
-                                        teaching_point = self.type_dict.get(index)
+                                        # index = {'size16': 1, 'size18': 2, 'size20': 3, 'error': 4}
+                                        teaching_point = self.type_dict.get(self.index_type)
                                         self.drop_place = tuple(self.coordinate_dict.get(teaching_point))
 
                                         # inverse kinematic pick place and drop place
@@ -801,42 +845,74 @@ class MainWindow:
         p = qt_format.scaled(dis_width, dis_height, Qt.KeepAspectRatio)
         return QPixmap.fromImage(p)
 
-    def update_result(self):
-        if self.detect_result[0] == 'size20':
+    def update_results(self):
+        """
+        Timer interrupt 1s
+        """
+        # show size result
+        if self.detect_result[0] == 'error':
             self.uic.res_size.setStyleSheet("background: rgb(255,0,0);")
-        elif self.detect_result[0] == 'size18':
-            self.uic.res_size.setStyleSheet("background: rgb(255,255,0);")
-        elif self.detect_result[0] == 'size16':
-            self.uic.res_size.setStyleSheet("background: rgb(0,255,0);")
         else:
             self.uic.res_size.setStyleSheet("background: rgb(255,255,255);")
         self.uic.res_size.setText(self.detect_result[0])
 
+        # show color result
         if self.detect_result[1] == 'red':
-            self.uic.res_color.setStyleSheet("background: rgb(255,0,0);")
+            self.uic.res_color.setStyleSheet("background: rgb(255,255,255);color: rgb(255,0,0);")
         elif self.detect_result[1] == 'yellow':
-            self.uic.res_color.setStyleSheet("background: rgb(255,255,0);")
+            self.uic.res_color.setStyleSheet("background: rgb(255,255,255);color: rgb(255,255,0);")
+        elif self.detect_result[1] == 'error':
+            self.uic.res_color.setStyleSheet("background: rgb(255,0,0);color: rgb(0,0,0);")
         else:
             self.uic.res_color.setStyleSheet("background: rgb(255,255,255);")
         self.uic.res_color.setText(self.detect_result[1])
 
+        # show product result
+        if self.product_result == "Error":
+            self.uic.result.setStyleSheet("background: rgb(255,0,0);")
+        else:
+            self.uic.result.setStyleSheet("background: rgb(255,255,255);")
+        self.uic.result.setText(self.product_result)
+
+        # show pick-place and drop-place
         self.uic.pick_pl.setText(str(self.pick_place))
         self.uic.drop_pl.setText(str(self.drop_place))
 
-        if serialCom.receive_buff[3] == 1:
-            self.isRobotAvailable = True
-            serialCom.receive_buff = b'00000'
-        elif serialCom.receive_buff[3] == 0:
-            self.isRobotAvailable = False
-            serialCom.receive_buff = b'00000'
+        # device 1: arduino/robot
+        if serialCom1.receive_buff[1] == 1:
+            if serialCom1.receive_buff[3] == 1:
+                self.isRobotAvailable = True
+                serialCom1.receive_buff = b'00000'
+            elif serialCom1.receive_buff[3] == 0:
+                self.isRobotAvailable = False
+                serialCom1.receive_buff = b'00000'
+
+        # device 2: stm32/conveyor
+        if self.isReadSpeedMode:
+            self.buffer = robocod.concatenate(dev="2", cmd=robocod.READSPEED, data=None)
+            _ = serialCom2.send_data(self.buffer)
+            if serialCom2.receive_buff[1] == 0x32:
+                integer = int(serialCom2.receive_buff[2])
+                dec = int(serialCom2.receive_buff[3])
+                cSpeed = float(integer + dec / 10)
+                self.uic.txt_pv_sp.setText(str(cSpeed))
+                serialCom2.receive_buff = b'00000'
+
+                self.draw_graph(self.t, float(self.uic.txt_setpoint_sp.toPlainText()), cSpeed)
+                self.t += 1
 
     @staticmethod
-    def label_results(size, color):
+    def result_of_product(size, color):
+        """
+        :param size: size of product
+        :param color: color of product
+        :return: Result of Product, Index of size type
+        """
         size_dict = {'size16': 1, 'size18': 2, 'size20': 3, 'error': 4}
         color_dict = {'red': 0, 'yellow': 1, 'error': 2}
         if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2:
-            return 'error', 4
-        return 'not error', size_dict.get(size, None)
+            return 'Error', 4
+        return 'Not error', size_dict.get(size, None)
 
     # endregion
 
@@ -873,7 +949,7 @@ class MainWindow:
         coor00 = self.inverseForAutoMode([tuple(coor00)])
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.SET_INTER_POINT, data=[coor00[0][0], coor00[0][1],
                                                                                       coor00[0][2], 0, 0, 0])
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
         if not isSend:
             return
@@ -889,18 +965,20 @@ class MainWindow:
         # validate robot is available ? by asking mcu
         # .....send buffer and validate
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CHECK_STATE, data=None)
-        isSend = serialCom.send_data(self.buffer)
+        isSend = serialCom1.send_data(self.buffer)
         self.check_sending(isSend)
         if not isSend:
             return
 
+        self.isReadSpeedMode = False
+
         if isSend:
-            if serialCom.receive_buff[3] == 1:
+            if serialCom1.receive_buff[3] == 1:
                 self.isRobotAvailable = True
-                serialCom.receive_buff = b'00000'
-            elif serialCom.receive_buff[3] == 0:
+                serialCom1.receive_buff = b'00000'
+            elif serialCom1.receive_buff[3] == 0:
                 self.isRobotAvailable = False
-                serialCom.receive_buff = b'00000'
+                serialCom1.receive_buff = b'00000'
 
         if not self.isRobotAvailable:
             self.msg.setIcon(QMessageBox.Warning)
@@ -909,10 +987,6 @@ class MainWindow:
             self.msg.setStandardButtons(QMessageBox.Ok)
             self.msg.exec()
             return
-
-        # run conveyor motor
-        # .....send buffer
-        self.isRunConveyor = True
 
         # on auto mode
         self.isAutoMode = True
@@ -957,9 +1031,6 @@ class MainWindow:
         self.uic.btn_j2_inc.setDisabled(False)
         self.uic.btn_j3_inc.setDisabled(False)
 
-        # stop conveyor motor
-        # .....send buffer
-
         # off mode
         self.isAutoMode = False
 
@@ -984,6 +1055,7 @@ class MainWindow:
     def changed_opt(self):
         if self.uic.cb_opt_calib_cam.currentText() == "Default Calibration":
             self.uic.lb_opt_calib_cam.setText("Use pretrained model")
+            self.uic.lb_opt_calib_cam.setStyleSheet("color: rgb(0,0,255);")
             self.uic.btn_calib_mode_cam.setDisabled(True)
             self.uic.btn_scrshot.setDisabled(True)
             self.uic.btn_calib_cam.setDisabled(True)
@@ -994,6 +1066,7 @@ class MainWindow:
             self.list_calibrated_model()
         else:
             self.uic.lb_opt_calib_cam.setText("Create new calib model")
+            self.uic.lb_opt_calib_cam.setStyleSheet("color: rgb(255,0,0);")
             self.uic.btn_calib_mode_cam.setDisabled(False)
             self.uic.btn_apply_calib_model.setDisabled(True)
             self.uic.btn_on_cam_test.setDisabled(True)
@@ -1086,7 +1159,7 @@ class MainWindow:
             self.uic.txt_info_calib_cam.setStyleSheet("background: rgb(255,0,0);")
             self.uic.txt_info_calib_cam.setText("Insert the calibrate model name to continue")
         else:
-            self.uic.txt_info_calib_cam.setStyleSheet("background: rgb(255,255,255);")
+            self.uic.txt_info_calib_cam.setStyleSheet("background: transparent;")
             model_name = self.uic.txt_name_calib_model.toPlainText()
             self.uic.txt_info_calib_cam.setText(f"Save model into: '../{camera_calib.calib_dir_path}/{model_name}'")
             self.uic.btn_save_model.setDisabled(True)
@@ -1101,7 +1174,7 @@ class MainWindow:
         if not self.isCalibSizeModelMode:
             info_apply = camera_calib.load_model(self.uic.cb_calib_model.currentText())
             self.uic.txt_info_calib_cam.setText(info_apply)
-            self.uic.txt_info_calib_cam.setStyleSheet("background: rgb(255,255,255);")
+            self.uic.txt_info_calib_cam.setStyleSheet("background: transparent;")
             self.uic.txt_calib_model.setText(f"Change to '{self.uic.cb_calib_model.currentText()}' model")
             self.uic.lb_info.setText(f"Change to '{self.uic.cb_calib_model.currentText()}' model")
         else:
@@ -1163,6 +1236,19 @@ class MainWindow:
     # endregion
 
     # region conveyor speed
+    def draw_graph(self, x, y_sp, y_pv):
+        self.uic.graphicsView.scene().clear()
+        self.x.append(x)
+        self.y_pv.append(y_pv)
+        self.y_sp.append(y_sp)
+        plt.plot(self.x, self.y_pv, 'r')
+        plt.plot(self.x, self.y_sp, 'b')
+        self.fig.savefig('data/graph.png')
+        pixmap = QPixmap('data/graph.png')
+        item = QGraphicsPixmapItem(pixmap)
+        self.uic.graphicsView.scene().addItem(item)
+        self.uic.graphicsView.show()
+
     def list_low_area(self):
         it = ["-10", "-8", "-6", "-4", "-2", "0"]
         self.uic.cb_low_area.addItems(it)
@@ -1174,14 +1260,61 @@ class MainWindow:
         self.uic.cb_high_area.setCurrentIndex(2)
 
     def apply_rf_model(self):
-        rfPoint.CONVEYOR_VELOCITY = int(self.uic.txt_convey_sp_rf.toPlainText())
-        rfPoint.create_new_model()
-        self.uic.txt_info_convey_rf.setText("Applied!")
-        self.uic.txt_info_convey_rf.setStyleSheet("background: rgb(0,255,0);")
+        if self.uic.btn_apply_rf.text() == "Apply":
+            rfPoint.CONVEYOR_VELOCITY = int(self.uic.txt_convey_sp_rf.toPlainText())
+            rfPoint.LOW_WORKING_Y_AREA = int(self.uic.cb_low_area.currentText())
+            rfPoint.HIGH_WORKING_Y_AREA = int(self.uic.cb_high_area.currentText())
+            rfPoint.create_new_model()
+            self.uic.txt_info_convey_rf.setText("Applied!")
+            self.uic.txt_info_convey_rf.setStyleSheet("background: rgb(0,255,0);")
+            self.uic.btn_apply_rf.setText("Cancel")
+            self.isReadSpeedMode = False
+            self.x.clear()
+            self.y_pv.clear()
+            self.y_sp.clear()
+            self.isApplyRF = True
+        else:
+            self.uic.txt_info_convey_rf.clear()
+            self.uic.txt_info_convey_rf.setStyleSheet("background: transparent")
+            self.uic.btn_apply_rf.setText("Apply")
+            self.isApplyRF = False
 
     def sp_convey_changed(self):
-        self.uic.txt_info_convey_rf.clear()
-        self.uic.txt_info_convey_rf.setStyleSheet("background: transparent")
+        self.uic.txt_convey_sp_rf.setText(self.uic.txt_setpoint_sp.toPlainText())
+
+    def run_conveyor(self):
+        if self.uic.btn_run_convey.text() == "Start Conveyor":
+            if not 1 <= float(self.uic.txt_setpoint_sp.toPlainText()) <= 5:
+                self.msg.setIcon(QMessageBox.Warning)
+                self.msg.setText("Set-point is out of range [1,5] cm")
+                self.msg.setWindowTitle("Error")
+                self.msg.setStandardButtons(QMessageBox.Ok)
+                self.msg.exec()
+                return
+
+            self.buffer = robocod.concatenate(dev="2", cmd=robocod.RUNCONVEY,
+                                              data=[self.uic.txt_setpoint_sp.toPlainText(),
+                                                    0, 0, 0, 0, 0])
+            isSend = serialCom2.send_data(self.buffer)
+            self.check_sending(isSend)
+            if not isSend:
+                return
+
+            self.uic.btn_run_convey.setText("Stop Conveyor")
+            self.isRunConveyor = True
+            self.isReadSpeedMode = True
+            if not self.timer.isActive():
+                self.timer.start()
+        else:
+            self.buffer = robocod.concatenate(dev="2", cmd=robocod.STOPCONVEY, data=None)
+            isSend = serialCom2.send_data(self.buffer)
+            self.check_sending(isSend)
+            if not isSend:
+                return
+
+            self.uic.btn_run_convey.setText("Start Conveyor")
+            self.isRunConveyor = False
+            self.isReadSpeedMode = False
 
     # endregion
 

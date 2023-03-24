@@ -55,15 +55,19 @@ void loop() {
         case ControlEFCmd:
           if (int(data[0])==0) {
             robot.airMotorControl(0);
+            robot.valveSolenoid(1);
           }
           else {
+            robot.valveSolenoid(0);
             robot.airMotorControl(1);
           }
           break;
 
         case ProcessCmd:
-          robot.robotAutoProcess(data[0], data[1], data[2], data[3], data[4], data[5]);
-          Serial.write(isAvailable, sizeof(isAvailable));
+          if (~(data[0]==0 && data[1]==0)) {
+            robot.robotAutoProcess(data[0], data[1], data[2], data[3], data[4], data[5]);
+            Serial.write(isAvailable, sizeof(isAvailable));
+          }
           break;
 
         case SetP00Cmd:
@@ -96,7 +100,7 @@ void loop() {
           break;
 
         case CheckStateCmd:
-          bool state = robot.currentPosition();
+          bool state = robot.isHomePosition();
           if (state == false) {
             Serial.write(notAvailable, sizeof(notAvailable));
           }

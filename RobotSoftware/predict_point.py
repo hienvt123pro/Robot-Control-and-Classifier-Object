@@ -29,7 +29,7 @@ class RandomForestPredictPoint:
         return round(y_future_point[0], 2)
 
     def create_new_model(self):
-        conveyor_velocity_norm = np.random.normal(loc=self.CONVEYOR_VELOCITY, scale=0.1, size=self.SAMPLES_DIM)
+        conveyor_velocity_norm = np.random.normal(loc=self.CONVEYOR_VELOCITY, scale=0.15, size=self.SAMPLES_DIM)
         time_robot_norm = np.random.normal(loc=self.T_ROBOT, scale=0.2, size=self.SAMPLES_DIM)
         time_delay_norm = np.random.normal(loc=self.T_DELAY, scale=0.5, size=self.SAMPLES_DIM)
 
