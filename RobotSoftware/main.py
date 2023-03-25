@@ -72,6 +72,9 @@ class MainWindow:
         self.isShowArea = False
         self.rectangleArea = []
 
+        # Product Data
+        self.current_page = 1
+
         # region robot params
         self.d1 = 12.9
         self.a2 = 14
@@ -125,6 +128,18 @@ class MainWindow:
         self.uic.rbutton_new.setToolTipDuration(10000)
         self.uic.btn_reset_point.setToolTip("Clear all teaching point")
         self.uic.btn_reset_point.setToolTipDuration(10000)
+        self.uic.btn_savepoint.setToolTip("Save the point to database")
+        self.uic.btn_savepoint.setToolTipDuration(10000)
+        self.uic.cbox_working_area.setToolTip("Show activated area of robot")
+        self.uic.cbox_working_area.setToolTipDuration(10000)
+        self.uic.btn_apply_rf.setToolTip("Apply the 'pick-place' model and stop PID graph")
+        self.uic.btn_apply_rf.setToolTipDuration(10000)
+        self.uic.btn_renew_ports.setToolTip("Refresh COM ports")
+        self.uic.btn_renew_ports.setToolTipDuration(10000)
+        self.uic.btn_refresh_table.setToolTip("Refresh product data")
+        self.uic.btn_refresh_table.setToolTipDuration(10000)
+        self.uic.btn_export_table.setToolTip("Export data to Excel")
+        self.uic.btn_export_table.setToolTipDuration(10000)
 
         # endregion
 
@@ -136,8 +151,8 @@ class MainWindow:
         self.uic.txt_setpoint_sp.textChanged.connect(self.sp_convey_changed)
 
         # event combo box
-        self.uic.cb_com.activated.connect(self.list_ports())
-        self.uic.cb_com_2.activated.connect(self.list_ports())
+        self.uic.cb_com.activated.connect(self.list_ports1())
+        self.uic.cb_com_2.activated.connect(self.list_ports2())
         self.uic.cb_baudrate.activated.connect(self.list_baudrate())
         self.uic.cb_point.activated.connect(self.list_points())
         self.uic.cb_point.currentTextChanged.connect(self.changed_point)
@@ -150,6 +165,7 @@ class MainWindow:
 
         # event push button
         self.uic.btn_cnt.clicked.connect(self.connection)
+        self.uic.btn_renew_ports.clicked.connect(self.renew_ports)
         self.uic.btn_calibJ1.clicked.connect(self.calib_J1)
         self.uic.btn_calibJ2.clicked.connect(self.calib_J2)
         self.uic.btn_calibJ3.clicked.connect(self.calib_J3)
@@ -188,6 +204,7 @@ class MainWindow:
         self.uic.btn_end_effector.clicked.connect(self.end_effector)
         self.uic.btn_apply_rf.clicked.connect(self.apply_rf_model)
         self.uic.btn_run_convey.clicked.connect(self.run_conveyor)
+        self.uic.btn_next_page.clicked.connect(self.change_page)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
@@ -198,26 +215,34 @@ class MainWindow:
         # endregion
 
     # region port connection
-    def list_ports(self):
+    def list_ports1(self):
         self.uic.cb_com.clear()
-        self.uic.cb_com_2.clear()
-        ports = serialCom1.list_ports_name()
-        if not ports:
+        ports1 = serialCom1.list_ports_name()
+        if not ports1:
             self.uic.cb_com.addItem("not found")
+            return
+        for port in ports1:
+            p = str(port)
+            self.uic.cb_com.addItem(p[:5])
+
+    def list_ports2(self):
+        self.uic.cb_com_2.clear()
+        ports2 = serialCom2.list_ports_name()
+        if not ports2:
             self.uic.cb_com_2.addItem("not found")
             return
-        name_ports = []
-        for port in ports:
+        for port in ports2:
             p = str(port)
-            name_ports.append(p[:5])
-        self.uic.cb_com.addItems(list(set(name_ports)))
-        self.uic.cb_com_2.addItems(list(set(name_ports)))
+            self.uic.cb_com_2.addItem(p[:5])
+
+    def renew_ports(self):
+        self.list_ports1()
+        self.list_ports2()
 
     def list_baudrate(self):
         self.uic.cb_baudrate.addItem("115200")
 
     def connection(self):
-        self.list_ports()
         if self.uic.btn_cnt.text() == "Connect":
             port_name_1 = self.uic.cb_com.currentText()
             port_name_2 = self.uic.cb_com_2.currentText()
@@ -283,7 +308,8 @@ class MainWindow:
     def teaching_mode(self):
         if self.uic.rbutton_new.isChecked():
             self.uic.btn_savepoint.setDisabled(False)
-            self.uic.txt_info_teaching.setText(my_database.get_table_comment())
+            self.uic.txt_info_teaching.setText(my_database.get_table_comment() + "\n"
+                                               + self.re_text(my_database.read_from_database()))
         else:
             self.uic.btn_savepoint.setDisabled(True)
 
@@ -752,8 +778,8 @@ class MainWindow:
                             # read buffer -> validate robot is available?
                             if self.isRobotAvailable:
                                 # checking center point (pick place) is in range of conveyor work-place
-                                # 16 < 'x_coor' < 24 (centi) and 'y_coor' in working area of model RandomForest
-                                if 16 < self.temp_pick_place[0] < 24 and \
+                                # 14 < 'x_coor' < 24 (centi) and 'y_coor' in working area of model RandomForest
+                                if 14 < self.temp_pick_place[0] < 24 and \
                                         rfPoint.LOW_WORKING_Y_AREA < self.temp_pick_place[1] < rfPoint.HIGH_WORKING_Y_AREA:
                                     # check the object is not error
                                     if self.product_result == "Not error":
@@ -761,7 +787,7 @@ class MainWindow:
                                         if self.isRunConveyor and self.isApplyRF:
                                             y_new = rfPoint.predict_new_point(self.temp_pick_place[1],
                                                                               rfPoint.AVERAGE_SYS_DELAY_TIME)
-                                            self.pick_place = (self.pick_place[0], y_new, self.pick_place[2])
+                                            self.pick_place = (self.temp_pick_place[0], y_new, self.temp_pick_place[2])
                                         else:
                                             self.pick_place = self.temp_pick_place
 
@@ -867,15 +893,15 @@ class MainWindow:
                 self.uic.cbox_working_area.setChecked(False)
                 return
             world_area = [(24, rfPoint.HIGH_WORKING_Y_AREA, 0), (24, rfPoint.LOW_WORKING_Y_AREA, 0),
-                          (16, rfPoint.LOW_WORKING_Y_AREA, 0), (16, rfPoint.HIGH_WORKING_Y_AREA, 0)]
+                          (14, rfPoint.LOW_WORKING_Y_AREA, 0), (14, rfPoint.HIGH_WORKING_Y_AREA, 0)]
             self.rectangleArea.clear()
             for coor in world_area:
                 self.rectangleArea.append(camera_calib.findImage2DCoors(list(coor)))
             self.isShowArea = True
-            self.uic.cbox_working_area.setStyleSheet("color: rgb(255,0,0);border: 1px solid #000000;")
+            self.uic.cbox_working_area.setStyleSheet("color: rgb(255,0,0);background:transparent; margin-left: 8px;")
         else:
             self.isShowArea = False
-            self.uic.cbox_working_area.setStyleSheet("color: rgb(0,0,0);border: 1px solid #000000;")
+            self.uic.cbox_working_area.setStyleSheet("color: rgb(0,0,0);background:transparent; margin-left: 8px;")
 
     @staticmethod
     def convert_cv_qt(cv_img, dis_width, dis_height):
@@ -1138,7 +1164,7 @@ class MainWindow:
                 self.uic.btn_scrshot.setDisabled(False)
                 self.uic.btn_calib_cam.setDisabled(False)
                 self.uic.cb_opt_calib_cam.setDisabled(True)
-                self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(0,255,0);")
+                self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(0,255,0);color: rgb(0,0,0);")
                 _, _ = camera_calib.check_dir()
                 self.uic.txt_info_calib_cam.setText("Start the calibration process")
                 self.isCalibCamMode = True
@@ -1150,7 +1176,7 @@ class MainWindow:
                 self.uic.btn_calib_cam.setDisabled(True)
                 self.uic.btn_save_model.setDisabled(True)
                 self.uic.cb_opt_calib_cam.setDisabled(False)
-                self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(235,235,235);")
+                self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(235,235,235);color: rgb(0,0,0);")
                 self.uic.calib_cam_view.clear()
                 self.uic.txt_info_calib_cam.setText("Stop the calibration process")
 
@@ -1290,12 +1316,12 @@ class MainWindow:
         self.uic.graphicsView.show()
 
     def list_low_area(self):
-        it = ["-10", "-8", "-6", "-4", "-2", "0"]
+        it = ["-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0"]
         self.uic.cb_low_area.addItems(it)
-        self.uic.cb_low_area.setCurrentIndex(3)
+        self.uic.cb_low_area.setCurrentIndex(10)
 
     def list_high_area(self):
-        it = ["0", "2", "4", "6", "8", "10"]
+        it = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
         self.uic.cb_high_area.addItems(it)
         self.uic.cb_high_area.setCurrentIndex(2)
 
@@ -1361,6 +1387,17 @@ class MainWindow:
                 "border-width : 1px; border-style:inset;")
             self.isRunConveyor = False
             self.isReadSpeedMode = False
+
+    # endregion
+
+    # region product data
+    def change_page(self):
+        self.current_page = 1 - self.current_page
+        self.uic.stackedWidget.setCurrentIndex(self.current_page)
+        if self.current_page == 0:
+            self.uic.lb_info_page.setText("-- Page 2 of 2")
+        else:
+            self.uic.lb_info_page.setText("-- Page 1 of 2")
 
     # endregion
 

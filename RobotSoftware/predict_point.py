@@ -14,11 +14,11 @@ from sklearn.ensemble import RandomForestRegressor
 class RandomForestPredictPoint:
     def __init__(self):
         self.CONVEYOR_VELOCITY = 3  # (cm/sec)
-        self.T_ROBOT = 2  # time robot down (sec)
+        self.T_ROBOT = 1.3  # time robot down (sec)
         self.T_DELAY = 0.28 + 0.0155  # time_detect + time_run_rf (sec)
         self.AVERAGE_SYS_DELAY_TIME = 2.2955  # (sec)
-        self.LOW_WORKING_Y_AREA = -4  # (cm)
-        self.HIGH_WORKING_Y_AREA = 4  # (cm)
+        self.LOW_WORKING_Y_AREA = 0  # (cm)
+        self.HIGH_WORKING_Y_AREA = 2  # (cm)
         self.SAMPLES_DIM = 200
 
         with open('models/reg_point.pkl', 'rb') as f:
