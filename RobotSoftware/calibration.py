@@ -277,6 +277,19 @@ class CamCalib:
         except:
             return "Calibration model is not exists"
 
+    def findImage2DCoors(self, real_coors: list):
+        """
+        :param real_coors: [xw,yw,0]
+        :return: image coordinates [x,y]
+        """
+        try:
+            pix_coor, _ = self.convert3Dto2D_findDeptZ(self.K_mtx, self.rvecs, self.tvecs, real_coors)
+            ceil_arr = np.ceil(pix_coor)
+            return tuple(map(int, ceil_arr.flatten()))
+        except Exception as e:
+            print(e)
+            return 0, 0
+
     def findPerspective3DCoors(self, pixel_coors: list):
         """
         :param pixel_coors: [x,y,1]

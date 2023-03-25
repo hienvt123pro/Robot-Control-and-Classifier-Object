@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix, accuracy_score
 # -----------------------------------
 # 1. Prepare and scaler data
 
-MAX_DATA_LEN = 108
+MAX_DATA_LEN = 106
 
 # standard scaler input
 sc = StandardScaler()
@@ -40,11 +40,11 @@ Y_train = onehot_encoder.fit_transform(integer_encoded)
 # create model
 classifier = Sequential()
 classifier.add(Dropout(0.2, input_shape=(3,)))
-classifier.add(Dense(units=64, activation='relu'))
+classifier.add(Dense(units=32, activation='relu'))
 classifier.add(Dropout(0.5))
-classifier.add(Dense(units=64, activation='relu'))
+classifier.add(Dense(units=32, activation='relu'))
 classifier.add(Dropout(0.5))
-classifier.add(Dense(units=64, activation='relu'))
+classifier.add(Dense(units=32, activation='relu'))
 classifier.add(Dropout(0.5))
 classifier.add(Dense(units=4, activation='softmax'))
 
@@ -52,7 +52,7 @@ classifier.add(Dense(units=4, activation='softmax'))
 classifier.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
 # Fit the model
-classifier.fit(X_train, Y_train, batch_size=16, epochs=300)
+classifier.fit(X_train, Y_train, batch_size=16, epochs=500)
 
 # evaluate the model
 scores = classifier.evaluate(X_train, Y_train)

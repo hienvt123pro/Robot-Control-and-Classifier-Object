@@ -145,3 +145,13 @@ class SizeAndColorProcess:
             print(e, "-unclear object")
 
         return img, size, color, cX, cY
+
+
+# -----------------------------------------------------------
+# 3. Draw the working area
+def draw_working_area(img, corner_points: list):
+    rect = cv2.minAreaRect(np.array(corner_points))
+    box = cv2.boxPoints(rect)
+    box = np.int0(box)
+    cv2.drawContours(img, [box], 0, (0, 0, 255), 2)
+    return img

@@ -22,7 +22,7 @@ print("Loaded model from disk")
 # ------------------------------------------
 # 2. Scaler the test input
 
-MAX_DATA_TRAIN_LEN = 108
+MAX_DATA_TRAIN_LEN = 106
 MAX_DATA_TEST_LEN = 39
 
 sc = StandardScaler()

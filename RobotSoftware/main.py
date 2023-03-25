@@ -5,7 +5,7 @@ from PySide2 import QtCore
 from GUI import gui
 from communicate import serialCom1, receive_thread_1, serialCom2, receive_thread_2
 from camera import mycam
-from detect import SizeAndColorProcess, ObjectProcess
+from detect import SizeAndColorProcess, ObjectProcess, draw_working_area
 from find_feature import find_features
 from preprocessing import preprocessing_img
 from database import my_database
@@ -51,7 +51,7 @@ class MainWindow:
         self.isReadSpeedMode = False
         self.isApplyRF = False
 
-        # timer interrupt
+        # Timer Interrupt
         self.timer = QtCore.QTimer()
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_results)
@@ -67,6 +67,10 @@ class MainWindow:
         plt.ylabel('speed conveyor (cm/s)')
         plt.title("PID Control")
         plt.ylim([0, 10])
+
+        # Working Area
+        self.isShowArea = False
+        self.rectangleArea = []
 
         # region robot params
         self.d1 = 12.9
@@ -109,12 +113,26 @@ class MainWindow:
         self.uic.btn_scrshot.setDisabled(True)
         self.uic.btn_calib_cam.setDisabled(True)
         self.uic.btn_save_model.setDisabled(True)
-        self.uic.txt_convey_sp_rf.setText("3")
+        self.uic.cb_com.setToolTip("Choose COM to Robot")
+        self.uic.cb_com.setToolTipDuration(10000)
+        self.uic.cb_com_2.setToolTip("Choose COM to Conveyor")
+        self.uic.cb_com_2.setToolTipDuration(10000)
+        self.uic.btn_Home.setToolTip("Robot go to home position")
+        self.uic.btn_Home.setToolTipDuration(10000)
+        self.uic.btn_calibHome.setToolTip("Calibrate and move robot to home")
+        self.uic.btn_Home.setToolTipDuration(10000)
+        self.uic.rbutton_new.setToolTip("Create new teaching point")
+        self.uic.rbutton_new.setToolTipDuration(10000)
+        self.uic.btn_reset_point.setToolTip("Clear all teaching point")
+        self.uic.btn_reset_point.setToolTipDuration(10000)
 
         # endregion
 
         # region events
-        # even text edit
+        # event check edit
+        self.uic.cbox_working_area.clicked.connect(self.show_working_area)
+
+        # event text edit
         self.uic.txt_setpoint_sp.textChanged.connect(self.sp_convey_changed)
 
         # event combo box
@@ -674,6 +692,8 @@ class MainWindow:
                     # start_time = time.time()
                     image = mycam.get_frames()
                     isObject, obj, logo, bbox = object_processing.obj_detector_process(image)
+                    if self.isShowArea:
+                        obj = draw_working_area(obj, self.rectangleArea)
                     self.uic.obj_view.setPixmap(self.convert_cv_qt(obj, 600, 450))
                     if isObject:
                         size, size_result, color_result, center_x, center_y = sz_color_processing.detect_size_color(
@@ -703,7 +723,6 @@ class MainWindow:
                         del obj
                         del logo
                         del image
-
                     else:
                         sz_color_processing.uncertain_algorithm.reset_bel()
                         self.uic.logo_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 200, 200))
@@ -733,8 +752,8 @@ class MainWindow:
                             # read buffer -> validate robot is available?
                             if self.isRobotAvailable:
                                 # checking center point (pick place) is in range of conveyor work-place
-                                # 18 < 'x_coor' < 24 (centi) and 'y_coor' in working area of model RandomForest
-                                if 18 < self.temp_pick_place[0] < 24 and \
+                                # 16 < 'x_coor' < 24 (centi) and 'y_coor' in working area of model RandomForest
+                                if 16 < self.temp_pick_place[0] < 24 and \
                                         rfPoint.LOW_WORKING_Y_AREA < self.temp_pick_place[1] < rfPoint.HIGH_WORKING_Y_AREA:
                                     # check the object is not error
                                     if self.product_result == "Not error":
@@ -836,6 +855,27 @@ class MainWindow:
     def is_test_calib(self):
         self.isTestCalibSizeModel = True
         self.uic.lb_info.setText("Test new calibrated model")
+
+    def show_working_area(self):
+        if self.uic.cbox_working_area.isChecked():
+            if camera_calib.Z == 0:
+                self.msg.setIcon(QMessageBox.Warning)
+                self.msg.setText("Calibration model is not found")
+                self.msg.setWindowTitle("Error")
+                self.msg.setStandardButtons(QMessageBox.Ok)
+                self.msg.exec()
+                self.uic.cbox_working_area.setChecked(False)
+                return
+            world_area = [(24, rfPoint.HIGH_WORKING_Y_AREA, 0), (24, rfPoint.LOW_WORKING_Y_AREA, 0),
+                          (16, rfPoint.LOW_WORKING_Y_AREA, 0), (16, rfPoint.HIGH_WORKING_Y_AREA, 0)]
+            self.rectangleArea.clear()
+            for coor in world_area:
+                self.rectangleArea.append(camera_calib.findImage2DCoors(list(coor)))
+            self.isShowArea = True
+            self.uic.cbox_working_area.setStyleSheet("color: rgb(255,0,0);border: 1px solid #000000;")
+        else:
+            self.isShowArea = False
+            self.uic.cbox_working_area.setStyleSheet("color: rgb(0,0,0);border: 1px solid #000000;")
 
     @staticmethod
     def convert_cv_qt(cv_img, dis_width, dis_height):
@@ -1301,6 +1341,9 @@ class MainWindow:
                 return
 
             self.uic.btn_run_convey.setText("Stop Conveyor")
+            self.uic.light_stt_convey_sp.setStyleSheet(
+                "background: rgb(51,255,51); border-radius:35px; border-color: rgb(0, 0, 0); "
+                "border-width : 1px; border-style:inset;")
             self.isRunConveyor = True
             self.isReadSpeedMode = True
             if not self.timer.isActive():
@@ -1313,6 +1356,9 @@ class MainWindow:
                 return
 
             self.uic.btn_run_convey.setText("Start Conveyor")
+            self.uic.light_stt_convey_sp.setStyleSheet(
+                "background: rgb(255,0,0); border-radius:35px; border-color: rgb(0, 0, 0); "
+                "border-width : 1px; border-style:inset;")
             self.isRunConveyor = False
             self.isReadSpeedMode = False
 
