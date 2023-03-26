@@ -27,7 +27,7 @@ class SizeCalib:
     """
 
     def __init__(self):
-        self.d1_0, self.d2_0, self.d3_0 = 259.31548, 140.9351, 141.7679  # size 16 mean data feature
+        self.d1_0, self.d2_0, self.d3_0 = 257.1651, 143.5897, 139.9964  # size 16 mean data feature
         self.cf1, self.cf2, self.cf3 = 0, 0, 0
         self.size_model = load_model_json.load('models/size.json', "models/size.h5")
         self.sc = joblib.load('data/scaler_size.save')
@@ -297,7 +297,7 @@ class CamCalib:
         """
         try:
             x_real, y_real, z_real = self.convert2Dto3D(self.K_mtx, self.rvecs, self.tvecs, pixel_coors, self.Z)
-            return tuple(round(coor, 2) for coor in (x_real, y_real, 3.1))
+            return tuple(round(coor, 2) for coor in (x_real, y_real, 3))
         except Exception as e:
             print(e)
             return 0, 0, 0

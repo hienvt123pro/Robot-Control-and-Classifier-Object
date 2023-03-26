@@ -1,4 +1,5 @@
-from PySide2.QtWidgets import QApplication, QMainWindow, QMessageBox, QGraphicsPixmapItem, QGraphicsScene
+from PySide2.QtWidgets import QApplication, QMainWindow, QMessageBox, QGraphicsPixmapItem, QGraphicsScene, \
+    QTableWidgetItem
 from PySide2.QtGui import QIcon, QImage, QPixmap
 from PySide2.QtCore import QSize, Qt
 from PySide2 import QtCore
@@ -8,7 +9,7 @@ from camera import mycam
 from detect import SizeAndColorProcess, ObjectProcess, draw_working_area
 from find_feature import find_features
 from preprocessing import preprocessing_img
-from database import my_database
+from database import robot_database
 from calibration import size_calib, camera_calib
 from robot_code import robocod
 from predict_point import rfPoint
@@ -16,6 +17,8 @@ import math
 import sys
 import threading
 import matplotlib.pyplot as plt
+import datetime
+
 
 # import time
 
@@ -43,6 +46,7 @@ class MainWindow:
         self.index_type = 0
         self.isAutoMode = False
         self.isRobotAvailable = False
+        self.isPreviewMode = True
         self.isCalibCamMode = False
         self.isTakeShot = False
         self.isCalibCam = False
@@ -62,7 +66,7 @@ class MainWindow:
         self.x, self.t = [], 0
         self.y_pv, self.y_sp = [], []
         self.fig = plt.figure()
-        self.fig.set_size_inches(550/100, 360/90)
+        self.fig.set_size_inches(550 / 100, 360 / 90)
         plt.xlabel('time (s)')
         plt.ylabel('speed conveyor (cm/s)')
         plt.title("PID Control")
@@ -74,6 +78,10 @@ class MainWindow:
 
         # Product Data
         self.current_page = 1
+        self.row_position = 0
+        self.product_name = "SP000"
+        self.product_index = 0
+        self.note = ""
 
         # region robot params
         self.d1 = 12.9
@@ -140,6 +148,12 @@ class MainWindow:
         self.uic.btn_refresh_table.setToolTipDuration(10000)
         self.uic.btn_export_table.setToolTip("Export data to Excel")
         self.uic.btn_export_table.setToolTipDuration(10000)
+        self.uic.btn_run.setToolTip("Start robot and stop preview mode")
+        self.uic.btn_run.setToolTipDuration(10000)
+        self.uic.btn_stop.setToolTip("Stop robot and restart preview mode")
+        self.uic.btn_stop.setToolTipDuration(10000)
+        self.uic.btn_start.setToolTip("Start the preview screen")
+        self.uic.btn_start.setToolTipDuration(10000)
 
         # endregion
 
@@ -308,8 +322,8 @@ class MainWindow:
     def teaching_mode(self):
         if self.uic.rbutton_new.isChecked():
             self.uic.btn_savepoint.setDisabled(False)
-            self.uic.txt_info_teaching.setText(my_database.get_table_comment() + "\n"
-                                               + self.re_text(my_database.read_from_database()))
+            self.uic.txt_info_teaching.setText(robot_database.get_table_comment() + "\n"
+                                               + self.re_text(robot_database.read_from_database()))
         else:
             self.uic.btn_savepoint.setDisabled(True)
 
@@ -321,7 +335,7 @@ class MainWindow:
         return text
 
     def reset_point(self):
-        my_database.delete_on_database()
+        robot_database.delete_on_database()
         self.uic.txt_info_teaching.setText("\n Clear all data!")
 
     def save_point(self):
@@ -336,11 +350,11 @@ class MainWindow:
         _z = self.uic.txt_cZ.toPlainText()
         if float(_x) != 0 and float(_y) != 0 and float(_z) != 0:
             try:
-                my_database.save_into_database(_p, _size, _x, _y, _z)
+                robot_database.save_into_database(_p, _size, _x, _y, _z)
             except Exception as e:
                 print(e, "-save point")
-                my_database.update_into_database(_p, _size, _x, _y, _z)
-            self.uic.txt_info_teaching.setText(self.re_text(my_database.read_from_database()))
+                robot_database.update_into_database(_p, _size, _x, _y, _z)
+            self.uic.txt_info_teaching.setText(self.re_text(robot_database.read_from_database()))
         else:
             self.msg.setIcon(QMessageBox.Warning)
             self.msg.setText("Check your teaching point")
@@ -726,19 +740,16 @@ class MainWindow:
                             image, bbox[0], bbox[1], bbox[2], bbox[3])
                         self.uic.size_view.setPixmap(self.convert_cv_qt(size, 600, 450))
 
-                        # 2D center result of object
-                        self.center_result[0] = center_x
-                        self.center_result[1] = center_y
+                        if self.isPreviewMode or self.isRobotAvailable:
+                            # 2D center result of object
+                            self.center_result[0] = center_x
+                            self.center_result[1] = center_y
 
-                        # size, color detection results
-                        self.detect_result = [size_result, color_result]
+                            # size, color detection results
+                            self.detect_result = [size_result, color_result]
 
-                        # convert 2D center to 3D center
-                        self.product_result, self.index_type = self.result_of_product(size_result, color_result)
-                        if self.product_result == 'Error':
-                            self.pick_place = (0, 0, 0)
-                            self.drop_place = (0, 0, 0)
-                        else:
+                            # convert 2D center to 3D center
+                            self.product_result, self.index_type = self.result_of_product(size_result, color_result)
                             if not self.isAutoMode:
                                 self.pick_place = camera_calib.findPerspective3DCoors(self.center_result)
                             else:
@@ -767,21 +778,21 @@ class MainWindow:
                         When robot is available, then send center of robot coordinate:
                         - step 1: if isObj is true, check robot is available ? by read the buffer.
                         - step 2: if yes, check detect result (size, color, logo) ?
-                        - step 3: if one of detect result is error, back step 1, else next step.
+                        - step 3: if one of detect result is error, send reject process command to mcu, set robot unavailable
+                        and back to step 1, else next step.
                         - step 4: convert center x, center y to robot coordinate (pick place).
                         - step 5: validate drop place from dict (type, coordinate), if not find, raise error.
                         - step 6: inverse kinematic pick place and drop place.
                         - step 7: send that points to mcu, set robot unavailable.
                         """
-
                         if isObject:
-                            # read buffer -> validate robot is available?
+                            # read buffer -> validate robot is available? then check product is not error or error
                             if self.isRobotAvailable:
-                                # checking center point (pick place) is in range of conveyor work-place
+                                # check center point (pick place) is in range of conveyor working-place
                                 # 14 < 'x_coor' < 24 (centi) and 'y_coor' in working area of model RandomForest
                                 if 14 < self.temp_pick_place[0] < 24 and \
                                         rfPoint.LOW_WORKING_Y_AREA < self.temp_pick_place[1] < rfPoint.HIGH_WORKING_Y_AREA:
-                                    # check the object is not error
+                                    # check the product is not error
                                     if self.product_result == "Not error":
                                         # predicting center point (pick place) depend on machine learning algorithm
                                         if self.isRunConveyor and self.isApplyRF:
@@ -792,7 +803,7 @@ class MainWindow:
                                             self.pick_place = self.temp_pick_place
 
                                         # validate the drop place
-                                        # index = {'size16': 1, 'size18': 2, 'size20': 3, 'error': 4}
+                                        # index is {'size16': 1, 'size18': 2, 'size20': 3, 'error': 4}
                                         teaching_point = self.type_dict.get(self.index_type)
                                         self.drop_place = tuple(self.coordinate_dict.get(teaching_point))
 
@@ -804,6 +815,38 @@ class MainWindow:
 
                                         # set robot unavailable
                                         self.isRobotAvailable = False
+
+                                        # show data on sheet
+                                        self.product_index += 1
+                                        self.note = "Standards"
+                                        self.add_row_data(
+                                            [datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                             self.product_name + str(self.product_index),
+                                             self.product_result, self.detect_result[0], self.detect_result[1],
+                                             self.note])
+
+                                    # check product is error, but robot does not pick this error product
+                                    if self.product_result == "Error":
+                                        # conduct the act of rejecting to pick up the object (delay robot in time of
+                                        # working area / conveyor_velocity)
+                                        self.pick_place = (0, 0, 0)
+                                        self.drop_place = (0, 0, 0)
+                                        self.sendProcessMove(self.pick_place,
+                                                             (rfPoint.HIGH_WORKING_Y_AREA - rfPoint.LOW_WORKING_Y_AREA,
+                                                              rfPoint.CONVEYOR_VELOCITY, 0))
+                                        self.isRobotAvailable = False
+
+                                        # show data on sheet
+                                        self.product_index += 1
+                                        if self.detect_result[0] == "error":
+                                            self.note = "Size Error"
+                                        if self.detect_result[1] == "error":
+                                            self.note = "Color Error"
+                                        self.add_row_data([datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                                           self.product_name + str(self.product_index),
+                                                           self.product_result, self.detect_result[0],
+                                                           self.detect_result[1],
+                                                           self.note])
 
             except Exception as e:
                 print(e, "-start cam")
@@ -926,7 +969,7 @@ class MainWindow:
         if self.detect_result[1] == 'red':
             self.uic.res_color.setStyleSheet("background: rgb(255,255,255);color: rgb(255,0,0);")
         elif self.detect_result[1] == 'yellow':
-            self.uic.res_color.setStyleSheet("background: rgb(255,255,255);color: rgb(255,255,0);")
+            self.uic.res_color.setStyleSheet("background: rgb(255,255,0);color: rgb(0,0,0);")
         elif self.detect_result[1] == 'error':
             self.uic.res_color.setStyleSheet("background: rgb(255,0,0);color: rgb(0,0,0);")
         else:
@@ -990,7 +1033,7 @@ class MainWindow:
                 {"P01": [5, 10, 10]} --- coordinate_dict
             :return: True or False if there have teaching data in database
         """
-        table = my_database.read_from_database()
+        table = robot_database.read_from_database()
         if table:
             for row in table:
                 self.type_dict.update({row[1]: row[0]})
@@ -1036,8 +1079,6 @@ class MainWindow:
         if not isSend:
             return
 
-        self.isReadSpeedMode = False
-
         if isSend:
             if serialCom1.receive_buff[3] == 1:
                 self.isRobotAvailable = True
@@ -1056,6 +1097,8 @@ class MainWindow:
 
         # on auto mode
         self.isAutoMode = True
+        self.isPreviewMode = False
+        self.isReadSpeedMode = False
 
         # setup properties
         self.uic.btn_run.setDisabled(True)
@@ -1099,6 +1142,7 @@ class MainWindow:
 
         # off mode
         self.isAutoMode = False
+        self.isPreviewMode = True
 
     def reset(self):
         self.uic.btn_run.setDisabled(False)
@@ -1334,7 +1378,6 @@ class MainWindow:
             self.uic.txt_info_convey_rf.setText("Applied!")
             self.uic.txt_info_convey_rf.setStyleSheet("background: rgb(0,255,0);")
             self.uic.btn_apply_rf.setText("Cancel")
-            self.isReadSpeedMode = False
             self.x.clear()
             self.y_pv.clear()
             self.y_sp.clear()
@@ -1398,6 +1441,16 @@ class MainWindow:
             self.uic.lb_info_page.setText("-- Page 2 of 2")
         else:
             self.uic.lb_info_page.setText("-- Page 1 of 2")
+
+    def add_row_data(self, data: list):
+        """
+        :param data: No./DateTime/Product/Size/Color/Note
+        :return:
+        """
+        self.row_position = self.uic.tableWidget.rowCount()
+        self.uic.tableWidget.insertRow(self.row_position)
+        for i in range(6):
+            self.uic.tableWidget.setItem(self.row_position, i, QTableWidgetItem(str(data[i])))
 
     # endregion
 

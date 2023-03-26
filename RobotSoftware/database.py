@@ -2,7 +2,7 @@ import psycopg2
 import psycopg2.extras
 
 
-class MyDatabase:
+class RobotDatabase:
     """
     Connect to postgresSql, purpose to save teaching pont data for drop-place of robot end-effector
     """
@@ -64,4 +64,4 @@ class MyDatabase:
         cnt.close()
 
 
-my_database = MyDatabase()
+robot_database = RobotDatabase()

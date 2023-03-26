@@ -992,13 +992,13 @@ class Ui_MainWindow(object):
         self.cbox_working_area = QCheckBox(self.frame_3)
         self.cbox_working_area.setObjectName(u"cbox_working_area")
         self.cbox_working_area.setGeometry(QRect(210, 300, 131, 31))
-        self.cbox_working_area.setCursor(QCursor(Qt.PointingHandCursor))
         sizePolicy = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.cbox_working_area.sizePolicy().hasHeightForWidth())
         self.cbox_working_area.setSizePolicy(sizePolicy)
         self.cbox_working_area.setFont(font12)
+        self.cbox_working_area.setCursor(QCursor(Qt.PointingHandCursor))
         self.cbox_working_area.setStyleSheet(u"background:transparent; margin-left: 8px;")
         self.listView_6 = QListView(self.frame_3)
         self.listView_6.setObjectName(u"listView_6")
@@ -1019,13 +1019,13 @@ class Ui_MainWindow(object):
         self.data_tab.setObjectName(u"data_tab")
         self.frame_9 = QFrame(self.data_tab)
         self.frame_9.setObjectName(u"frame_9")
-        self.frame_9.setGeometry(QRect(0, 0, 1001, 881))
+        self.frame_9.setGeometry(QRect(0, 0, 1081, 881))
         self.frame_9.setStyleSheet(u"background:rgb(230, 230, 230)")
         self.frame_9.setFrameShape(QFrame.StyledPanel)
         self.frame_9.setFrameShadow(QFrame.Plain)
         self.stackedWidget = QStackedWidget(self.frame_9)
         self.stackedWidget.setObjectName(u"stackedWidget")
-        self.stackedWidget.setGeometry(QRect(260, 50, 711, 781))
+        self.stackedWidget.setGeometry(QRect(260, 50, 791, 781))
         self.stackedWidget.setFont(font12)
         self.stackedWidget.setStyleSheet(u"border: 1px solid; background: #FFFFFF")
         self.page_0 = QWidget()
@@ -1052,8 +1052,8 @@ class Ui_MainWindow(object):
         icon11.addFile(u"GUI/icon_excel.png", QSize(), QIcon.Normal, QIcon.Off)
         self.btn_export_table.setIcon(icon11)
         self.tableWidget = QTableWidget(self.page_1)
-        if (self.tableWidget.columnCount() < 7):
-            self.tableWidget.setColumnCount(7)
+        if (self.tableWidget.columnCount() < 6):
+            self.tableWidget.setColumnCount(6)
         brush = QBrush(QColor(0, 0, 0, 255))
         brush.setStyle(Qt.SolidPattern)
         font15 = QFont()
@@ -1084,16 +1084,12 @@ class Ui_MainWindow(object):
         __qtablewidgetitem5.setFont(font15);
         __qtablewidgetitem5.setForeground(brush);
         self.tableWidget.setHorizontalHeaderItem(5, __qtablewidgetitem5)
-        __qtablewidgetitem6 = QTableWidgetItem()
-        __qtablewidgetitem6.setFont(font15);
-        __qtablewidgetitem6.setForeground(brush);
-        self.tableWidget.setHorizontalHeaderItem(6, __qtablewidgetitem6)
         self.tableWidget.setObjectName(u"tableWidget")
-        self.tableWidget.setGeometry(QRect(20, 50, 671, 711))
+        self.tableWidget.setGeometry(QRect(20, 50, 751, 711))
         self.stackedWidget.addWidget(self.page_1)
         self.lb_info_page = QLabel(self.frame_9)
         self.lb_info_page.setObjectName(u"lb_info_page")
-        self.lb_info_page.setGeometry(QRect(880, 830, 91, 41))
+        self.lb_info_page.setGeometry(QRect(960, 830, 91, 41))
         font16 = QFont()
         font16.setFamily(u"Bahnschrift Light")
         font16.setPointSize(9)
@@ -1112,7 +1108,7 @@ class Ui_MainWindow(object):
         self.listView_3.setStyleSheet(u"background: #FFFFFF; border: 2px solid #000000;")
         self.label_65 = QLabel(self.frame_9)
         self.label_65.setObjectName(u"label_65")
-        self.label_65.setGeometry(QRect(500, 10, 251, 41))
+        self.label_65.setGeometry(QRect(530, 10, 251, 41))
         font17 = QFont()
         font17.setPointSize(13)
         font17.setBold(True)
@@ -1129,14 +1125,14 @@ class Ui_MainWindow(object):
         self.cbox_error.setObjectName(u"cbox_error")
         self.cbox_error.setGeometry(QRect(40, 150, 81, 20))
         self.cbox_error.setFont(font4)
-        self.cbox_error.setStyleSheet(u"background:transparent;")
         self.cbox_error.setCursor(QCursor(Qt.PointingHandCursor))
+        self.cbox_error.setStyleSheet(u"background:transparent;")
         self.cbox_not_error = QCheckBox(self.frame_9)
         self.cbox_not_error.setObjectName(u"cbox_not_error")
         self.cbox_not_error.setGeometry(QRect(40, 110, 101, 20))
         self.cbox_not_error.setFont(font4)
-        self.cbox_not_error.setStyleSheet(u"background:transparent;")
         self.cbox_not_error.setCursor(QCursor(Qt.PointingHandCursor))
+        self.cbox_not_error.setStyleSheet(u"background:transparent;")
         self.lb_quantity = QLabel(self.frame_9)
         self.lb_quantity.setObjectName(u"lb_quantity")
         self.lb_quantity.setGeometry(QRect(40, 185, 171, 31))
@@ -1195,8 +1191,7 @@ class Ui_MainWindow(object):
         self.btn_filter.setIcon(icon12)
         self.btn_next_page = QPushButton(self.frame_9)
         self.btn_next_page.setObjectName(u"btn_next_page")
-        self.btn_next_page.setGeometry(QRect(830, 840, 41, 28))
-        self.btn_next_page.setCursor(QCursor(Qt.PointingHandCursor))
+        self.btn_next_page.setGeometry(QRect(910, 840, 41, 28))
         icon13 = QIcon()
         icon13.addFile(u"GUI/icon_data.png", QSize(), QIcon.Normal, QIcon.Off)
         self.tabWidget.addTab(self.data_tab, icon13, "")
@@ -1611,7 +1606,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
 
-        self.tabWidget.setCurrentIndex(2)
+        self.tabWidget.setCurrentIndex(0)
         self.btn_renew_ports.setDefault(False)
         self.btn_start.setDefault(False)
         self.stackedWidget.setCurrentIndex(1)
@@ -1826,19 +1821,17 @@ class Ui_MainWindow(object):
         self.btn_refresh_table.setText(QCoreApplication.translate("MainWindow", u"Refresh", None))
         self.btn_export_table.setText(QCoreApplication.translate("MainWindow", u" Export", None))
         ___qtablewidgetitem = self.tableWidget.horizontalHeaderItem(0)
-        ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"No.", None));
+        ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"Date Time", None));
         ___qtablewidgetitem1 = self.tableWidget.horizontalHeaderItem(1)
-        ___qtablewidgetitem1.setText(QCoreApplication.translate("MainWindow", u"Date Time", None));
+        ___qtablewidgetitem1.setText(QCoreApplication.translate("MainWindow", u"Name", None));
         ___qtablewidgetitem2 = self.tableWidget.horizontalHeaderItem(2)
-        ___qtablewidgetitem2.setText(QCoreApplication.translate("MainWindow", u"Name", None));
+        ___qtablewidgetitem2.setText(QCoreApplication.translate("MainWindow", u"Product", None));
         ___qtablewidgetitem3 = self.tableWidget.horizontalHeaderItem(3)
-        ___qtablewidgetitem3.setText(QCoreApplication.translate("MainWindow", u"Product", None));
+        ___qtablewidgetitem3.setText(QCoreApplication.translate("MainWindow", u"Size", None));
         ___qtablewidgetitem4 = self.tableWidget.horizontalHeaderItem(4)
-        ___qtablewidgetitem4.setText(QCoreApplication.translate("MainWindow", u"Size", None));
+        ___qtablewidgetitem4.setText(QCoreApplication.translate("MainWindow", u"Color", None));
         ___qtablewidgetitem5 = self.tableWidget.horizontalHeaderItem(5)
-        ___qtablewidgetitem5.setText(QCoreApplication.translate("MainWindow", u"Color", None));
-        ___qtablewidgetitem6 = self.tableWidget.horizontalHeaderItem(6)
-        ___qtablewidgetitem6.setText(QCoreApplication.translate("MainWindow", u"Note", None));
+        ___qtablewidgetitem5.setText(QCoreApplication.translate("MainWindow", u"Note", None));
         self.lb_info_page.setText(QCoreApplication.translate("MainWindow", u"-- Page 1 of 2", None))
         self.label_65.setText(QCoreApplication.translate("MainWindow", u"Product Data Sheet", None))
         self.label_66.setText(QCoreApplication.translate("MainWindow", u"Product filter", None))

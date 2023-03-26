@@ -13,10 +13,10 @@ from sklearn.ensemble import RandomForestRegressor
 
 class RandomForestPredictPoint:
     def __init__(self):
-        self.CONVEYOR_VELOCITY = 3  # (cm/sec)
-        self.T_ROBOT = 1.3  # time robot down (sec)
-        self.T_DELAY = 0.28 + 0.0155  # time_detect + time_run_rf (sec)
-        self.AVERAGE_SYS_DELAY_TIME = 2.2955  # (sec)
+        self.CONVEYOR_VELOCITY = 4  # (cm/sec)
+        self.T_ROBOT = 1.7  # time robot down (sec)
+        self.T_DETECT = 0.28 + 0.0155  # time_detect + time_run_rf (sec)
+        self.AVERAGE_SYS_DELAY_TIME = self.T_ROBOT + self.T_DETECT  # (sec)
         self.LOW_WORKING_Y_AREA = 0  # (cm)
         self.HIGH_WORKING_Y_AREA = 2  # (cm)
         self.SAMPLES_DIM = 200
@@ -29,11 +29,11 @@ class RandomForestPredictPoint:
         return round(y_future_point[0], 2)
 
     def create_new_model(self):
-        conveyor_velocity_norm = np.random.normal(loc=self.CONVEYOR_VELOCITY, scale=0.15, size=self.SAMPLES_DIM)
-        time_robot_norm = np.random.normal(loc=self.T_ROBOT, scale=0.2, size=self.SAMPLES_DIM)
-        time_delay_norm = np.random.normal(loc=self.T_DELAY, scale=0.5, size=self.SAMPLES_DIM)
+        conveyor_velocity_norm = np.random.normal(loc=self.CONVEYOR_VELOCITY, scale=0.2, size=self.SAMPLES_DIM)
+        time_robot_norm = np.random.normal(loc=self.T_ROBOT, scale=0.05, size=self.SAMPLES_DIM)
+        time_detect_norm = np.random.normal(loc=self.T_DETECT, scale=0.5, size=self.SAMPLES_DIM)
 
-        total_delay_time = time_robot_norm + time_delay_norm
+        total_delay_time = time_robot_norm + time_detect_norm
         y_current = np.random.uniform(low=self.LOW_WORKING_Y_AREA, high=self.HIGH_WORKING_Y_AREA, size=(self.SAMPLES_DIM,))
         y_future = y_current + conveyor_velocity_norm * total_delay_time
 
