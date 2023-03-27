@@ -9,7 +9,7 @@ from camera import mycam
 from detect import SizeAndColorProcess, ObjectProcess, draw_working_area
 from find_feature import find_features
 from preprocessing import preprocessing_img
-from database import robot_database
+from database import robot_database, product_database
 from calibration import size_calib, camera_calib
 from robot_code import robocod
 from predict_point import rfPoint
@@ -79,7 +79,7 @@ class MainWindow:
         # Product Data
         self.current_page = 1
         self.row_position = 0
-        self.product_name = "SP000"
+        self.product_name = "SP"
         self.product_index = 0
         self.note = ""
 
@@ -219,6 +219,8 @@ class MainWindow:
         self.uic.btn_apply_rf.clicked.connect(self.apply_rf_model)
         self.uic.btn_run_convey.clicked.connect(self.run_conveyor)
         self.uic.btn_next_page.clicked.connect(self.change_page)
+        self.uic.btn_refresh_table.clicked.connect(self.refresh_sheet)
+        self.uic.btn_export_table.clicked.connect(self.export_sheet_to_excel)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
@@ -227,6 +229,13 @@ class MainWindow:
         self.uic.slide_cm.valueChanged.connect(self.set_centimeters)
         self.uic.slide_points_test.valueChanged.connect(self.set_num_points)
         # endregion
+
+    def showMessageBox(self, type_box: QMessageBox, text: str, title: str, standard_button: QMessageBox):
+        self.msg.setIcon(type_box)
+        self.msg.setText(text)
+        self.msg.setWindowTitle(title)
+        self.msg.setStandardButtons(standard_button)
+        self.msg.exec()
 
     # region port connection
     def list_ports1(self):
@@ -261,11 +270,8 @@ class MainWindow:
             port_name_1 = self.uic.cb_com.currentText()
             port_name_2 = self.uic.cb_com_2.currentText()
             if port_name_1 == port_name_2:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Duplicate COM Ports at 2 device\nor ports are not available")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Duplicate COM Ports at 2 device\nor ports are not available",
+                                    "Error", QMessageBox.Ok)
                 return
 
             baudrate = self.uic.cb_baudrate.currentText()
@@ -288,11 +294,7 @@ class MainWindow:
                 self.uic.light_stt.setStyleSheet(
                     "background: rgb(255,0,0); border-radius:20px; border-color: rgb(0, 0, 0); "
                     "border-width : 0.5px; border-style:inset;")
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Check your COM Port")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Check your COM Port", "Error", QMessageBox.Ok)
         else:
             serialCom1.disconnect()
             serialCom2.disconnect()
@@ -356,22 +358,14 @@ class MainWindow:
                 robot_database.update_into_database(_p, _size, _x, _y, _z)
             self.uic.txt_info_teaching.setText(self.re_text(robot_database.read_from_database()))
         else:
-            self.msg.setIcon(QMessageBox.Warning)
-            self.msg.setText("Check your teaching point")
-            self.msg.setWindowTitle("Error")
-            self.msg.setStandardButtons(QMessageBox.Ok)
-            self.msg.exec()
+            self.showMessageBox(QMessageBox.Warning, "Check your teaching point", "Error", QMessageBox.Ok)
 
     # endregion
 
     # region calibrate robot
     def check_sending(self, state):
         if not state:
-            self.msg.setIcon(QMessageBox.Warning)
-            self.msg.setText("Check your COM Port")
-            self.msg.setWindowTitle("Error")
-            self.msg.setStandardButtons(QMessageBox.Ok)
-            self.msg.exec()
+            self.showMessageBox(QMessageBox.Warning, "Check your COM Port", "Error", QMessageBox.Ok)
 
     def calib_J1(self):
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBJ1, data=None)
@@ -414,11 +408,7 @@ class MainWindow:
             self.uic.txt_mY.setText('0')
             self.uic.txt_mZ.setText('0')
         else:
-            self.msg.setIcon(QMessageBox.Warning)
-            self.msg.setText("Check your COM Port")
-            self.msg.setWindowTitle("Error")
-            self.msg.setStandardButtons(QMessageBox.Ok)
-            self.msg.exec()
+            self.showMessageBox(QMessageBox.Warning, "Check your COM Port", "Error", QMessageBox.Ok)
 
     def calib_home(self):
         self.buffer = robocod.concatenate(dev="1", cmd=robocod.CALIBHOME, data=None)
@@ -686,18 +676,10 @@ class MainWindow:
         icon2.addFile(u"GUI/icon_turn_off.PNG", QSize(), QIcon.Normal, QIcon.Off)
         if self.uic.btn_start.text() == " Start Cam":
             if self.isCalibSizeModelMode or self.isTestCamCalibModel:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Camera calibration mode is online")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Camera calibration mode is online", "Error", QMessageBox.Ok)
                 return
             if camera_calib.Z == 0:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Calibration model is not found")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found", "Error", QMessageBox.Ok)
                 return
             if mycam.connect_cam():
                 self.uic.btn_start.setIcon(icon2)
@@ -816,14 +798,9 @@ class MainWindow:
                                         # set robot unavailable
                                         self.isRobotAvailable = False
 
-                                        # show data on sheet
+                                        # edit data
                                         self.product_index += 1
                                         self.note = "Standards"
-                                        self.add_row_data(
-                                            [datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                                             self.product_name + str(self.product_index),
-                                             self.product_result, self.detect_result[0], self.detect_result[1],
-                                             self.note])
 
                                     # check product is error, but robot does not pick this error product
                                     if self.product_result == "Error":
@@ -836,17 +813,24 @@ class MainWindow:
                                                               rfPoint.CONVEYOR_VELOCITY, 0))
                                         self.isRobotAvailable = False
 
-                                        # show data on sheet
+                                        # edit data
                                         self.product_index += 1
                                         if self.detect_result[0] == "error":
                                             self.note = "Size Error"
                                         if self.detect_result[1] == "error":
                                             self.note = "Color Error"
-                                        self.add_row_data([datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                                                           self.product_name + str(self.product_index),
-                                                           self.product_result, self.detect_result[0],
-                                                           self.detect_result[1],
-                                                           self.note])
+
+                                    # show data on sheet
+                                    self.add_row_data([datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                                       f"{self.product_name}{self.product_index:04d}",
+                                                       self.product_result, self.detect_result[0],
+                                                       self.detect_result[1], self.note])
+
+                                    # save data into database
+                                    product_database.save_into_database(datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                                                        f"{self.product_name}{self.product_index:04d}",
+                                                                        self.product_result, self.detect_result[0],
+                                                                        self.detect_result[1], self.note)
 
             except Exception as e:
                 print(e, "-start cam")
@@ -857,11 +841,7 @@ class MainWindow:
     def calib_model_mode(self):
         if self.uic.btn_calib_mode.text() == "On Mode":
             if not self.isOpenCam:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Check your Camera")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Check your Camera", "Error", QMessageBox.Ok)
                 return
             self.isCalibSizeModelMode = True
             self.uic.btn_calib_size.setDisabled(False)
@@ -928,11 +908,7 @@ class MainWindow:
     def show_working_area(self):
         if self.uic.cbox_working_area.isChecked():
             if camera_calib.Z == 0:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Calibration model is not found")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found", "Error", QMessageBox.Ok)
                 self.uic.cbox_working_area.setChecked(False)
                 return
             world_area = [(24, rfPoint.HIGH_WORKING_Y_AREA, 0), (24, rfPoint.LOW_WORKING_Y_AREA, 0),
@@ -1044,11 +1020,7 @@ class MainWindow:
     def run(self):
         # read teaching point from database, if not find data, return false mode
         if not self.convert_teaching_data():
-            self.msg.setIcon(QMessageBox.Warning)
-            self.msg.setText("Check your teaching point")
-            self.msg.setWindowTitle("Error")
-            self.msg.setStandardButtons(QMessageBox.Ok)
-            self.msg.exec()
+            self.showMessageBox(QMessageBox.Warning, "Check your teaching point", "Error", QMessageBox.Ok)
             self.isAutoMode = False
             return
 
@@ -1064,11 +1036,7 @@ class MainWindow:
             return
 
         if not self.isOpenCam:
-            self.msg.setIcon(QMessageBox.Warning)
-            self.msg.setText("Check your Camera")
-            self.msg.setWindowTitle("Error")
-            self.msg.setStandardButtons(QMessageBox.Ok)
-            self.msg.exec()
+            self.showMessageBox(QMessageBox.Warning, "Check your Camera", "Error", QMessageBox.Ok)
             return
 
         # validate robot is available ? by asking mcu
@@ -1088,11 +1056,7 @@ class MainWindow:
                 serialCom1.receive_buff = b'00000'
 
         if not self.isRobotAvailable:
-            self.msg.setIcon(QMessageBox.Warning)
-            self.msg.setText("Move robot to home position")
-            self.msg.setWindowTitle("Error")
-            self.msg.setStandardButtons(QMessageBox.Ok)
-            self.msg.exec()
+            self.showMessageBox(QMessageBox.Warning, "Move robot to home position", "Error", QMessageBox.Ok)
             return
 
         # on auto mode
@@ -1184,11 +1148,7 @@ class MainWindow:
     def calib_cam_model(self):
         if self.uic.btn_calib_mode_cam.text() == "On Mode":
             if self.isOpenCam or self.isTestCamCalibModel:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Another mode is online")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Another mode is online", "Error", QMessageBox.Ok)
                 return
 
             # check images file in 'checkerboard' folder
@@ -1294,18 +1254,10 @@ class MainWindow:
     def test_calib_cam_model(self):
         if self.uic.btn_on_cam_test.text() == "ON":
             if self.isCalibCamMode or self.isOpenCam:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Another mode is online")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Another mode is online", "Error", QMessageBox.Ok)
                 return
             if camera_calib.Z == 0:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Calibration model is not found")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found", "Error", QMessageBox.Ok)
                 return
             if mycam.connect_cam():
                 self.uic.btn_on_cam_test.setText("OFF")
@@ -1394,11 +1346,7 @@ class MainWindow:
     def run_conveyor(self):
         if self.uic.btn_run_convey.text() == "Start Conveyor":
             if not 1 <= float(self.uic.txt_setpoint_sp.toPlainText()) <= 5:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText("Set-point is out of range [1,5] cm")
-                self.msg.setWindowTitle("Error")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.exec()
+                self.showMessageBox(QMessageBox.Warning, "Set-point is out of range [1,5] cm", "Error", QMessageBox.Ok)
                 return
 
             self.buffer = robocod.concatenate(dev="2", cmd=robocod.RUNCONVEY,
@@ -1451,6 +1399,23 @@ class MainWindow:
         self.uic.tableWidget.insertRow(self.row_position)
         for i in range(6):
             self.uic.tableWidget.setItem(self.row_position, i, QTableWidgetItem(str(data[i])))
+
+    def refresh_sheet(self):
+        self.uic.tableWidget.setRowCount(0)
+        sheet = product_database.read_from_database()
+        for row in sheet:
+            self.add_row_data(row)
+
+    def export_sheet_to_excel(self):
+        if self.isOpenCam or self.isCalibCamMode or self.isTestCamCalibModel:
+            self.showMessageBox(QMessageBox.Warning, "Cannot export data when the other mode is online", "Error",
+                                QMessageBox.Ok)
+            return
+
+        if product_database.export_excel():
+            self.showMessageBox(QMessageBox.Information, "Excel export successful", "Info", QMessageBox.Ok)
+        else:
+            self.showMessageBox(QMessageBox.Information, "Excel export unsuccessful", "Info", QMessageBox.Ok)
 
     # endregion
 
