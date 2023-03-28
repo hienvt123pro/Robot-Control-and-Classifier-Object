@@ -154,12 +154,16 @@ class MainWindow:
         self.uic.btn_stop.setToolTipDuration(10000)
         self.uic.btn_start.setToolTip("Start the preview screen")
         self.uic.btn_start.setToolTipDuration(10000)
+        self.uic.cb_size.setDisabled(True)
+        self.uic.cb_color.setDisabled(True)
 
         # endregion
 
         # region events
         # event check edit
         self.uic.cbox_working_area.clicked.connect(self.show_working_area)
+        self.uic.cbox_error.clicked.connect(self.filter_error)
+        self.uic.cbox_not_error.clicked.connect(self.filter_not_error)
 
         # event text edit
         self.uic.txt_setpoint_sp.textChanged.connect(self.sp_convey_changed)
@@ -221,6 +225,7 @@ class MainWindow:
         self.uic.btn_next_page.clicked.connect(self.change_page)
         self.uic.btn_refresh_table.clicked.connect(self.refresh_sheet)
         self.uic.btn_export_table.clicked.connect(self.export_sheet_to_excel)
+        self.uic.btn_filter.clicked.connect(self.detail_filter)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
@@ -942,9 +947,9 @@ class MainWindow:
         self.uic.res_size.setText(self.detect_result[0])
 
         # show color result
-        if self.detect_result[1] == 'red':
+        if self.detect_result[1] == 'Red':
             self.uic.res_color.setStyleSheet("background: rgb(255,255,255);color: rgb(255,0,0);")
-        elif self.detect_result[1] == 'yellow':
+        elif self.detect_result[1] == 'Yellow':
             self.uic.res_color.setStyleSheet("background: rgb(255,255,0);color: rgb(0,0,0);")
         elif self.detect_result[1] == 'error':
             self.uic.res_color.setStyleSheet("background: rgb(255,0,0);color: rgb(0,0,0);")
@@ -993,8 +998,8 @@ class MainWindow:
         :param color: color of product
         :return: Result of Product, Index of size type
         """
-        size_dict = {'size16': 1, 'size18': 2, 'size20': 3, 'error': 4}
-        color_dict = {'red': 0, 'yellow': 1, 'error': 2}
+        size_dict = {'16': 1, '18': 2, '20': 3, 'error': 4}
+        color_dict = {'Red': 0, 'Yellow': 1, 'error': 2}
         if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2:
             return 'Error', 4
         return 'Not error', size_dict.get(size, None)
@@ -1416,6 +1421,78 @@ class MainWindow:
             self.showMessageBox(QMessageBox.Information, "Excel export successful", "Info", QMessageBox.Ok)
         else:
             self.showMessageBox(QMessageBox.Information, "Excel export unsuccessful", "Info", QMessageBox.Ok)
+
+    def showAllData(self):
+        for i in range(self.uic.tableWidget.rowCount()):
+            self.uic.tableWidget.showRow(i)
+
+    def customFilter(self, col_index: int, col_value: str):
+        count = 0
+        for i in range(self.uic.tableWidget.rowCount()):
+            item = self.uic.tableWidget.item(i, col_index)
+            if item.text() != col_value:
+                self.uic.tableWidget.hideRow(i)
+            else:
+                count += 1
+        self.uic.lb_quantity.setText(f"Quantity: {count}")
+
+    def filter_error(self):
+        self.uic.cb_size.setDisabled(True)
+        self.uic.cb_color.setDisabled(True)
+        self.uic.btn_filter.setDisabled(True)
+        if self.uic.cbox_error.isChecked():
+            if self.uic.cbox_not_error.isChecked():
+                self.uic.cbox_not_error.setChecked(False)
+                self.showAllData()
+            # filter column 2, value "Error"
+            self.customFilter(2, "Error")
+        else:
+            self.showAllData()
+            self.uic.lb_quantity.setText("Quantity: ")
+
+    def filter_not_error(self):
+        if self.uic.cbox_not_error.isChecked():
+            self.uic.cb_size.setDisabled(False)
+            self.uic.cb_color.setDisabled(False)
+            self.uic.btn_filter.setDisabled(False)
+
+            if self.uic.cbox_error.isChecked():
+                self.uic.cbox_error.setChecked(False)
+                self.showAllData()
+            # filter column 2, value "Not Error"
+            self.customFilter(2, "Not Error")
+        else:
+            self.uic.cb_size.setDisabled(True)
+            self.uic.cb_color.setDisabled(True)
+            self.uic.btn_filter.setDisabled(True)
+            self.showAllData()
+            self.uic.lb_quantity.setText("Quantity: ")
+
+    def detail_filter(self):
+        self.showAllData()
+
+        if self.uic.cb_size.currentText() == "All" and self.uic.cb_color.currentText() == "All":
+            self.customFilter(2, "Not Error")
+            return
+
+        if self.uic.cb_size.currentText() == "All":
+            self.customFilter(4, self.uic.cb_color.currentText())
+            return
+
+        if self.uic.cb_color.currentText() == "All":
+            self.customFilter(3, self.uic.cb_size.currentText())
+            return
+
+        # size filter, color filter != "All"
+        count = 0
+        for i in range(self.uic.tableWidget.rowCount()):
+            item_size = self.uic.tableWidget.item(i, 3)
+            item_color = self.uic.tableWidget.item(i, 4)
+            if item_size.text() != self.uic.cb_size.currentText() or item_color.text() != self.uic.cb_color.currentText():
+                self.uic.tableWidget.hideRow(i)
+            else:
+                count += 1
+        self.uic.lb_quantity.setText(f"Quantity: {count}")
 
     # endregion
 

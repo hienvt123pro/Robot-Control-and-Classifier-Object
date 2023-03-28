@@ -92,12 +92,12 @@ class SizeAndColorProcess:
     # result functions for size and color model
     @staticmethod
     def size_result(y):
-        size_dict = {0: 'size16', 1: 'size18', 2: 'size20', 3: 'error'}
+        size_dict = {0: '16', 1: '18', 2: '20', 3: 'error'}
         return size_dict.get(y, None)
 
     @staticmethod
     def color_result(y):
-        color_dict = {0: 'red', 1: 'yellow'}
+        color_dict = {0: 'Red', 1: 'Yellow'}
         return color_dict.get(y, None)
 
     # preprocessing data for color model
