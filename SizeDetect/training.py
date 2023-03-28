@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix, accuracy_score
 # -----------------------------------
 # 1. Prepare and scaler data
 
-MAX_DATA_LEN = 106
+MAX_DATA_LEN = 97  # count in Excel
 
 # standard scaler input
 sc = StandardScaler()
@@ -52,7 +52,7 @@ classifier.add(Dense(units=4, activation='softmax'))
 classifier.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
 # Fit the model
-classifier.fit(X_train, Y_train, batch_size=16, epochs=500)
+classifier.fit(X_train, Y_train, batch_size=12, epochs=600)
 
 # evaluate the model
 scores = classifier.evaluate(X_train, Y_train)
@@ -73,15 +73,25 @@ print("Saved model to disk")
 
 
 # -----------------------------------
-# 4. Save the scaler standard input data
+# 4. Save the scaler standard input data, and mean calib size16
 
 data_0 = pd.read_excel(r'new_datasets/train/size_data.xlsx', sheet_name='size')
+
 d1 = pd.DataFrame(data_0.iloc[0:MAX_DATA_LEN, :], columns=['d1'])
 d2 = pd.DataFrame(data_0.iloc[0:MAX_DATA_LEN, :], columns=['d2'])
 d3 = pd.DataFrame(data_0.iloc[0:MAX_DATA_LEN, :], columns=['d3'])
 sc.fit(np.concatenate((d1, d2, d3), axis=1))
-
 joblib.dump(sc, 'output_models/scaler_size.save')
+
+label = np.array(pd.DataFrame(data_0.iloc[0:MAX_DATA_LEN, :], columns=['label']))
+dim_label_0 = np.count_nonzero(label == 0)
+d1 = np.sum(pd.DataFrame(data_0.iloc[0:dim_label_0, :], columns=['d1']))
+d2 = np.sum(pd.DataFrame(data_0.iloc[0:dim_label_0, :], columns=['d2']))
+d3 = np.sum(pd.DataFrame(data_0.iloc[0:dim_label_0, :], columns=['d3']))
+mean_d1 = float(d1 / dim_label_0)
+mean_d2 = float(d2 / dim_label_0)
+mean_d3 = float(d3 / dim_label_0)
+joblib.dump(np.array([mean_d1, mean_d2, mean_d3]), 'output_models/mean_16.save')
 
 # -----------------------------------
 # 5. Evaluating model on training datasets
