@@ -1,6 +1,5 @@
 import numpy as np
 from keras.models import model_from_json
-import imutils
 import cv2
 
 # load json and create model
@@ -13,10 +12,10 @@ loaded_model.load_weights("color.h5")
 print("Loaded model from disk")
 
 # scaler for the input image
-test_org = cv2.imread('test.jpg')
-test = test_org[200:300, 200:300]
+test_org = cv2.imread("color_image/yellow (5).png")
+test = test_org[0:100, 0:100]
 test = cv2.cvtColor(test, cv2.COLOR_BGR2HSV)
-test = imutils.resize(test, 80, 80)
+test = cv2.resize(test, (80, 80))
 test = test / 255
 test = test.reshape(-1, 80, 80, 3)
 

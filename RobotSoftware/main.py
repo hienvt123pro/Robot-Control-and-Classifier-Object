@@ -46,6 +46,7 @@ class MainWindow:
         self.index_type = 0
         self.isAutoMode = False
         self.isRobotAvailable = False
+        self.isPreviousRobotAvailable = False
         self.isPreviewMode = True
         self.isCalibCamMode = False
         self.isTakeShot = False
@@ -780,7 +781,7 @@ class MainWindow:
                                 if 14 < self.temp_pick_place[0] < 24 and \
                                         rfPoint.LOW_WORKING_Y_AREA < self.temp_pick_place[1] < rfPoint.HIGH_WORKING_Y_AREA:
                                     # check the product is not error
-                                    if self.product_result == "Not error":
+                                    if self.product_result == "Not Error":
                                         # predicting center point (pick place) depend on machine learning algorithm
                                         if self.isRunConveyor and self.isApplyRF:
                                             y_new = rfPoint.predict_new_point(self.temp_pick_place[1],
@@ -811,31 +812,21 @@ class MainWindow:
                                     if self.product_result == "Error":
                                         # conduct the act of rejecting to pick up the object (delay robot in time of
                                         # working area / conveyor_velocity)
-                                        self.pick_place = (0, 0, 0)
+                                        self.pick_place = self.temp_pick_place
                                         self.drop_place = (0, 0, 0)
-                                        self.sendProcessMove(self.pick_place,
+                                        self.sendProcessMove((0, 0, 0),
                                                              (rfPoint.HIGH_WORKING_Y_AREA - rfPoint.LOW_WORKING_Y_AREA,
                                                               rfPoint.CONVEYOR_VELOCITY, 0))
                                         self.isRobotAvailable = False
 
                                         # edit data
                                         self.product_index += 1
+                                        sz, color = '', ''
                                         if self.detect_result[0] == "error":
-                                            self.note = "Size Error"
+                                            sz = "Size Error"
                                         if self.detect_result[1] == "error":
-                                            self.note = "Color Error"
-
-                                    # show data on sheet
-                                    self.add_row_data([datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                                                       f"{self.product_name}{self.product_index:04d}",
-                                                       self.product_result, self.detect_result[0],
-                                                       self.detect_result[1], self.note])
-
-                                    # save data into database
-                                    product_database.save_into_database(datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                                                                        f"{self.product_name}{self.product_index:04d}",
-                                                                        self.product_result, self.detect_result[0],
-                                                                        self.detect_result[1], self.note)
+                                            color = "Color Error"
+                                        self.note = sz + "/" + color
 
             except Exception as e:
                 print(e, "-start cam")
@@ -968,6 +959,21 @@ class MainWindow:
         self.uic.pick_pl.setText(str(self.pick_place))
         self.uic.drop_pl.setText(str(self.drop_place))
 
+        # capture edge down when pick object
+        if self.isPreviousRobotAvailable and not self.isRobotAvailable:
+            if self.isRunConveyor:
+                # show data on sheet
+                self.add_row_data([datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                   f"{self.product_name}{self.product_index:04d}",
+                                   self.product_result, self.detect_result[0],
+                                   self.detect_result[1], self.note])
+
+                # save data into database
+                product_database.save_into_database(datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                                    f"{self.product_name}{self.product_index:04d}",
+                                                    self.product_result, self.detect_result[0],
+                                                    self.detect_result[1], self.note)
+
         # device 1: arduino/robot
         if serialCom1.receive_buff[1] == 1:
             if serialCom1.receive_buff[3] == 1:
@@ -976,6 +982,8 @@ class MainWindow:
             elif serialCom1.receive_buff[3] == 0:
                 self.isRobotAvailable = False
                 serialCom1.receive_buff = b'00000'
+
+        self.isPreviousRobotAvailable = self.isRobotAvailable
 
         # device 2: stm32/conveyor
         if self.isReadSpeedMode:
@@ -1002,7 +1010,7 @@ class MainWindow:
         color_dict = {'Red': 0, 'Yellow': 1, 'error': 2}
         if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2:
             return 'Error', 4
-        return 'Not error', size_dict.get(size, None)
+        return 'Not Error', size_dict.get(size, None)
 
     # endregion
 
@@ -1324,7 +1332,7 @@ class MainWindow:
     def list_high_area(self):
         it = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
         self.uic.cb_high_area.addItems(it)
-        self.uic.cb_high_area.setCurrentIndex(2)
+        self.uic.cb_high_area.setCurrentIndex(3)
 
     def apply_rf_model(self):
         if self.uic.btn_apply_rf.text() == "Apply":
@@ -1339,6 +1347,7 @@ class MainWindow:
             self.y_pv.clear()
             self.y_sp.clear()
             self.isApplyRF = True
+            self.isReadSpeedMode = False
         else:
             self.uic.txt_info_convey_rf.clear()
             self.uic.txt_info_convey_rf.setStyleSheet("background: transparent")
@@ -1368,6 +1377,7 @@ class MainWindow:
                 "border-width : 1px; border-style:inset;")
             self.isRunConveyor = True
             self.isReadSpeedMode = True
+            self.uic.txt_setpoint_sp.setDisabled(True)
             if not self.timer.isActive():
                 self.timer.start()
         else:
@@ -1383,6 +1393,7 @@ class MainWindow:
                 "border-width : 1px; border-style:inset;")
             self.isRunConveyor = False
             self.isReadSpeedMode = False
+            self.uic.txt_setpoint_sp.setDisabled(False)
 
     # endregion
 

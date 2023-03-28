@@ -97,7 +97,7 @@ class SizeAndColorProcess:
 
     @staticmethod
     def color_result(y):
-        color_dict = {0: 'Red', 1: 'Yellow'}
+        color_dict = {0: 'Red', 1: 'Yellow', 2: 'error'}
         return color_dict.get(y, None)
 
     # preprocessing data for color model

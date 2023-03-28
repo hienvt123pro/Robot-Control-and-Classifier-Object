@@ -301,7 +301,7 @@ class CamCalib:
         """
         try:
             x_real, y_real, z_real = self.convert2Dto3D(self.K_mtx, self.rvecs, self.tvecs, pixel_coors, self.Z)
-            return tuple(round(coor, 2) for coor in (x_real, y_real, 3))
+            return tuple(round(coor, 2) for coor in (x_real, y_real, 2.5))
         except Exception as e:
             print(e)
             return 0, 0, 0

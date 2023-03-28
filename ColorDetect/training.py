@@ -9,31 +9,34 @@ path = 'C:/Users/hieng/PycharmProjects/ColorDetect/dataset'
 a = MasterImage(PATH=path, IMAGE_SIZE=80)
 X_train, Y_train = a.load_dataset()
 
-
 # -----------------------------------------
 # 2. Create structure of CNN
 
 # defining model
 model = Sequential()
 
-# adding convolution layer / 3 * 3 * 3 * 16 + 16 = 448 params
+# adding convolution layer
 model.add(Conv2D(16, (3, 3), strides=2, activation='relu', input_shape=(80, 80, 3)))
+
+model.add(Conv2D(8, (2, 2), strides=2, activation='relu'))
 
 # adding pooling layer
 model.add(MaxPool2D(2, 2))
 
-# adding fully connected layer / 19 * 19 * 16 * 64 + 64 = 369728 params
+# adding fully connected layer
 model.add(Flatten())
-model.add(Dense(64, activation='relu'))
+model.add(Dense(16, activation='relu'))
 
-# adding output layer / 64 * 2 + 2 = 130 params
-model.add(Dense(2, activation='softmax'))
+# adding output layer
+model.add(Dense(3, activation='softmax'))
+
+# model.summary()
 
 # compiling the model
 model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
 # fitting the model
-model.fit(X_train, Y_train, batch_size=10, epochs=80)
+model.fit(X_train, Y_train, batch_size=12, epochs=150)
 
 # evaluate the model
 scores = model.evaluate(X_train, Y_train)
@@ -52,6 +55,6 @@ with open("color.json", "w") as json_file:
 model.save_weights("color.h5")
 print("Saved model to disk")
 
-print("\n")
-y_pred = model.predict(X_train)
-print(y_pred)
+# print("\n")
+# y_pred = model.predict(X_train)
+# print(y_pred)
