@@ -48,11 +48,11 @@ print("%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
 
 # serialize model to JSON
 model_json = model.to_json()
-with open("color.json", "w") as json_file:
+with open("output_model/color.json", "w") as json_file:
     json_file.write(model_json)
 
 # serialize weights to HDF5
-model.save_weights("color.h5")
+model.save_weights("output_model/color.h5")
 print("Saved model to disk")
 
 # print("\n")

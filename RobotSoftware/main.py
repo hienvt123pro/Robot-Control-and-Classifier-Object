@@ -6,7 +6,7 @@ from PySide2 import QtCore
 from GUI import gui
 from communicate import serialCom1, receive_thread_1, serialCom2, receive_thread_2
 from camera import mycam
-from detect import SizeAndColorProcess, ObjectProcess, draw_working_area
+from detect import SizeAndColorProcess, ObjectProcess, draw_working_area, save_image, read_image
 from find_feature import find_features
 from preprocessing import preprocessing_img
 from database import robot_database, product_database
@@ -18,6 +18,7 @@ import sys
 import threading
 import matplotlib.pyplot as plt
 import datetime
+import os
 
 
 # import time
@@ -83,6 +84,8 @@ class MainWindow:
         self.product_name = "SP"
         self.product_index = 0
         self.note = ""
+        self.refresh_sheet()
+        self.image_error_product = object_processing.waited_capture
 
         # region robot params
         self.d1 = 12.9
@@ -161,6 +164,9 @@ class MainWindow:
         # endregion
 
         # region events
+        # event tableWidget
+        self.uic.tableWidget.cellClicked.connect(self.handle_cell_clicked)
+
         # event check edit
         self.uic.cbox_working_area.clicked.connect(self.show_working_area)
         self.uic.cbox_error.clicked.connect(self.filter_error)
@@ -227,6 +233,7 @@ class MainWindow:
         self.uic.btn_refresh_table.clicked.connect(self.refresh_sheet)
         self.uic.btn_export_table.clicked.connect(self.export_sheet_to_excel)
         self.uic.btn_filter.clicked.connect(self.detail_filter)
+        self.uic.btn_clear_graph.clicked.connect(self.clear_graph)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
@@ -720,9 +727,12 @@ class MainWindow:
                     # start_time = time.time()
                     image = mycam.get_frames()
                     isObject, obj, logo, bbox = object_processing.obj_detector_process(image)
+
+                    self.image_error_product = image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
                     if self.isShowArea:
                         obj = draw_working_area(obj, self.rectangleArea)
                     self.uic.obj_view.setPixmap(self.convert_cv_qt(obj, 600, 450))
+
                     if isObject:
                         size, size_result, color_result, center_x, center_y = sz_color_processing.detect_size_color(
                             image, bbox[0], bbox[1], bbox[2], bbox[3])
@@ -826,7 +836,12 @@ class MainWindow:
                                             sz = "Size Error"
                                         if self.detect_result[1] == "error":
                                             color = "Color Error"
-                                        self.note = sz + "/" + color
+                                        self.note = sz + "/" + color if sz and color else sz or color
+
+                                        # save error product image
+                                        save_image(f"error_product/SP{self.product_index:04d}_"
+                                                   f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.png",
+                                                   self.image_error_product)
 
             except Exception as e:
                 print(e, "-start cam")
@@ -959,7 +974,7 @@ class MainWindow:
         self.uic.pick_pl.setText(str(self.pick_place))
         self.uic.drop_pl.setText(str(self.drop_place))
 
-        # capture edge down when pick object
+        # capture edge down when pick object, the purpose is save info of product to database
         if self.isPreviousRobotAvailable and not self.isRobotAvailable:
             if self.isRunConveyor:
                 # show data on sheet
@@ -1343,11 +1358,11 @@ class MainWindow:
             self.uic.txt_info_convey_rf.setText("Applied!")
             self.uic.txt_info_convey_rf.setStyleSheet("background: rgb(0,255,0);")
             self.uic.btn_apply_rf.setText("Cancel")
+            self.isApplyRF = True
+            self.isReadSpeedMode = False
             self.x.clear()
             self.y_pv.clear()
             self.y_sp.clear()
-            self.isApplyRF = True
-            self.isReadSpeedMode = False
         else:
             self.uic.txt_info_convey_rf.clear()
             self.uic.txt_info_convey_rf.setStyleSheet("background: transparent")
@@ -1359,8 +1374,8 @@ class MainWindow:
 
     def run_conveyor(self):
         if self.uic.btn_run_convey.text() == "Start Conveyor":
-            if not 1 <= float(self.uic.txt_setpoint_sp.toPlainText()) <= 5:
-                self.showMessageBox(QMessageBox.Warning, "Set-point is out of range [1,5] cm", "Error", QMessageBox.Ok)
+            if not 1 <= float(self.uic.txt_setpoint_sp.toPlainText()) <= 7:
+                self.showMessageBox(QMessageBox.Warning, "Set-point is out of range [1,7] cm", "Error", QMessageBox.Ok)
                 return
 
             self.buffer = robocod.concatenate(dev="2", cmd=robocod.RUNCONVEY,
@@ -1395,6 +1410,18 @@ class MainWindow:
             self.isReadSpeedMode = False
             self.uic.txt_setpoint_sp.setDisabled(False)
 
+    def clear_graph(self):
+        self.x = []
+        self.y_pv = []
+        self.y_sp = []
+        self.t = 0
+        self.fig.clf()
+        plt.xlabel('time (s)')
+        plt.ylabel('speed conveyor (cm/s)')
+        plt.title("PID Control")
+        plt.ylim([0, 10])
+        self.draw_graph(self.t, 0, 0)
+
     # endregion
 
     # region product data
@@ -1421,6 +1448,7 @@ class MainWindow:
         sheet = product_database.read_from_database()
         for row in sheet:
             self.add_row_data(row)
+        self.product_index = len(sheet) + 1
 
     def export_sheet_to_excel(self):
         if self.isOpenCam or self.isCalibCamMode or self.isTestCamCalibModel:
@@ -1504,6 +1532,17 @@ class MainWindow:
             else:
                 count += 1
         self.uic.lb_quantity.setText(f"Quantity: {count}")
+
+    def handle_cell_clicked(self, row, col):
+        item = self.uic.tableWidget.item(row, col)
+        search_name = item.text()[:6] + '_'
+        folder = 'error_product'
+        for file_name in os.listdir(folder):
+            if search_name in file_name:
+                path = os.path.join(folder, file_name)
+                image = read_image(path)
+                self.uic.error_product_view.setPixmap(self.convert_cv_qt(image, 480, 670))
+                return
 
     # endregion
 

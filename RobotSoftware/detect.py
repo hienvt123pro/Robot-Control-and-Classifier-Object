@@ -155,3 +155,13 @@ def draw_working_area(img, corner_points: list):
     box = np.int0(box)
     cv2.drawContours(img, [box], 0, (0, 0, 255), 2)
     return img
+
+
+# -----------------------------------------------------------
+# 4. Save and read the image
+def save_image(path, image):
+    cv2.imwrite(path, image)
+
+
+def read_image(path):
+    return cv2.imread(path)
