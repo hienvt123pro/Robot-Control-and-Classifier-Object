@@ -64,14 +64,14 @@ void loop() {
           break;
 
         case ProcessCmd:
-          if (~(data[0]==0 && data[1]==0 && data[2]==0)) {
-            robot.robotAutoProcess(data[0], data[1], data[2], data[3], data[4], data[5]);
-            Serial.write(isAvailable, sizeof(isAvailable));
-          }
-          else {
+          if ((data[0]==0 && data[1]==0 && data[2]==0)) {
             // the act of reject  
             int time_delay = int(data[3]/data[4]) * 1000;
             delay(time_delay);
+            Serial.write(isAvailable, sizeof(isAvailable));
+          }
+          else {
+            robot.robotAutoProcess(data[0], data[1], data[2], data[3], data[4], data[5]);
             Serial.write(isAvailable, sizeof(isAvailable));
           }
           break;
