@@ -12,6 +12,7 @@ class SerialCommunication:
         self.port = serial.Serial()
         self.list_ports = serial.tools.list_ports
         self.receive_buff = b'00000'
+        self.isKillThread = False
 
     def list_ports_name(self):
         return self.list_ports.comports()
@@ -45,6 +46,9 @@ class SerialCommunication:
                         self.receive_buff = self.port.readline(5)
                 except:
                     pass
+            if self.isKillThread:
+                self.isKillThread = False
+                break
 
 
 # device 1
@@ -54,3 +58,4 @@ receive_thread_1 = threading.Thread(target=serialCom1.receive_handler)
 # device 2
 serialCom2 = SerialCommunication()
 receive_thread_2 = threading.Thread(target=serialCom2.receive_handler)
+

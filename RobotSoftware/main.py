@@ -311,6 +311,8 @@ class MainWindow:
         else:
             serialCom1.disconnect()
             serialCom2.disconnect()
+            serialCom1.isKillThread = True
+            serialCom2.isKillThread = True
             self.isPortsCnt = False
             self.uic.btn_cnt.setText("Connect")
             self.uic.text_stt.setText("Status: Off")
@@ -974,7 +976,7 @@ class MainWindow:
         self.uic.pick_pl.setText(str(self.pick_place))
         self.uic.drop_pl.setText(str(self.drop_place))
 
-        # capture edge down when pick object, the purpose is save info of product to database
+        # capture edge down when pick object, the purpose is saving info of product to database
         if self.isPreviousRobotAvailable and not self.isRobotAvailable:
             if self.isRunConveyor:
                 # show data on sheet
@@ -1411,16 +1413,16 @@ class MainWindow:
             self.uic.txt_setpoint_sp.setDisabled(False)
 
     def clear_graph(self):
-        self.x = []
-        self.y_pv = []
-        self.y_sp = []
+        self.x.clear()
+        self.y_pv.clear()
+        self.y_sp.clear()
         self.t = 0
         self.fig.clf()
+        self.uic.graphicsView.scene().clear()
         plt.xlabel('time (s)')
         plt.ylabel('speed conveyor (cm/s)')
         plt.title("PID Control")
         plt.ylim([0, 10])
-        self.draw_graph(self.t, 0, 0)
 
     # endregion
 
@@ -1444,11 +1446,13 @@ class MainWindow:
             self.uic.tableWidget.setItem(self.row_position, i, QTableWidgetItem(str(data[i])))
 
     def refresh_sheet(self):
+        self.uic.cbox_error.setChecked(False)
+        self.uic.cbox_not_error.setChecked(False)
         self.uic.tableWidget.setRowCount(0)
         sheet = product_database.read_from_database()
         for row in sheet:
             self.add_row_data(row)
-        self.product_index = len(sheet) + 1
+        self.product_index = len(sheet)
 
     def export_sheet_to_excel(self):
         if self.isOpenCam or self.isCalibCamMode or self.isTestCamCalibModel:
@@ -1515,14 +1519,17 @@ class MainWindow:
             return
 
         if self.uic.cb_size.currentText() == "All":
+            self.customFilter(2, "Not Error")
             self.customFilter(4, self.uic.cb_color.currentText())
             return
 
         if self.uic.cb_color.currentText() == "All":
+            self.customFilter(2, "Not Error")
             self.customFilter(3, self.uic.cb_size.currentText())
             return
 
         # size filter, color filter != "All"
+        self.customFilter(2, "Not Error")
         count = 0
         for i in range(self.uic.tableWidget.rowCount()):
             item_size = self.uic.tableWidget.item(i, 3)
@@ -1542,6 +1549,7 @@ class MainWindow:
                 path = os.path.join(folder, file_name)
                 image = read_image(path)
                 self.uic.error_product_view.setPixmap(self.convert_cv_qt(image, 480, 670))
+                del image
                 return
 
     # endregion

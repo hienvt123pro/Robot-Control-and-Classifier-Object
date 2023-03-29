@@ -66,7 +66,7 @@ void loop() {
         case ProcessCmd:
           if ((data[0]==0 && data[1]==0 && data[2]==0)) {
             // the act of reject  
-            int time_delay = int(data[3]/data[4]) * 1000;
+            int time_delay = int(data[3]/data[4]) * 1000 + 500;
             delay(time_delay);
             Serial.write(isAvailable, sizeof(isAvailable));
           }
