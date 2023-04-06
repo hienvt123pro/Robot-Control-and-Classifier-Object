@@ -15,10 +15,10 @@ class RandomForestPredictPoint:
     def __init__(self):
         self.CONVEYOR_VELOCITY = 4  # (cm/sec)
         self.T_ROBOT = 1.7  # time robot down (sec)
-        self.T_DETECT = 0.26 + 0.0155  # time_detect + time_run_rf (sec)
+        self.T_DETECT = 0.35 + 0.0155  # time_detect + time_run_rf (sec)
         self.AVERAGE_SYS_DELAY_TIME = self.T_ROBOT + self.T_DETECT  # (sec)
         self.LOW_WORKING_Y_AREA = 0  # (cm)
-        self.HIGH_WORKING_Y_AREA = 2  # (cm)
+        self.HIGH_WORKING_Y_AREA = 3  # (cm)
         self.SAMPLES_DIM = 200
 
         with open('models/reg_point.pkl', 'rb') as f:

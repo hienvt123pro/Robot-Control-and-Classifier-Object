@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>1815</width>
-    <height>931</height>
+    <height>952</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -43,7 +43,7 @@
      <string notr="true">background-color: qlineargradient(spread:pad, x1:0.03, y1:0.955, x2:1, y2:0, stop:0 rgba(175, 175, 175, 57), stop:1 rgba(255, 255, 255, 255))</string>
     </property>
     <property name="currentIndex">
-     <number>2</number>
+     <number>0</number>
     </property>
     <property name="iconSize">
      <size>
@@ -3706,7 +3706,7 @@ border-style:inset;</string>
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>1081</width>
+        <width>1131</width>
         <height>881</height>
        </rect>
       </property>
@@ -3724,7 +3724,7 @@ border-style:inset;</string>
         <rect>
          <x>260</x>
          <y>50</y>
-         <width>791</width>
+         <width>851</width>
          <height>781</height>
         </rect>
        </property>
@@ -3806,7 +3806,7 @@ border-style:inset;</string>
           <rect>
            <x>20</x>
            <y>50</y>
-           <width>751</width>
+           <width>821</width>
            <height>711</height>
           </rect>
          </property>
@@ -3942,7 +3942,7 @@ border-style:inset;</string>
       <widget class="QLabel" name="lb_info_page">
        <property name="geometry">
         <rect>
-         <x>960</x>
+         <x>1020</x>
          <y>830</y>
          <width>91</width>
          <height>41</height>
@@ -3993,7 +3993,7 @@ border-style:inset;</string>
       <widget class="QLabel" name="label_65">
        <property name="geometry">
         <rect>
-         <x>530</x>
+         <x>560</x>
          <y>10</y>
          <width>251</width>
          <height>41</height>
@@ -4308,7 +4308,7 @@ border-style:inset;</string>
       <widget class="QPushButton" name="btn_next_page">
        <property name="geometry">
         <rect>
-         <x>910</x>
+         <x>960</x>
          <y>840</y>
          <width>41</width>
          <height>28</height>
@@ -4359,7 +4359,7 @@ border-style:inset;</string>
           <string notr="true">background: transparent;</string>
          </property>
          <property name="text">
-          <string>Faulty product photo</string>
+          <string>Error product photo</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignCenter</set>
@@ -5741,6 +5741,27 @@ p, li { white-space: pre-wrap; }
       </widget>
      </widget>
     </widget>
+   </widget>
+   <widget class="QLabel" name="lb_detect_time">
+    <property name="geometry">
+     <rect>
+      <x>1650</x>
+      <y>925</y>
+      <width>151</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>9</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>0.0000 s</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+    </property>
    </widget>
   </widget>
  </widget>

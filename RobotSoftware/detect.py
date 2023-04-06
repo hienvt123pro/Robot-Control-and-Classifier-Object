@@ -1,5 +1,5 @@
 """
-Provide functions, class for processing models (yolov5, size ANN, color CNN)
+Provide functions, class for processing models (yolov5, size ANN, color CNN, logo ANN depend on HoG feature)
 """
 
 from find_feature import find_features
@@ -20,7 +20,6 @@ class ObjectProcess:
         self.obj_model.iou = 0.5
         self.obj_model.conf = 0.83
         self.obj_classes = self.obj_model.names
-        self.bb = (0, 0, 0, 0)
         self.waited_capture = cv2.imread("GUI/load_image.png")
 
     @staticmethod
@@ -59,9 +58,10 @@ class ObjectProcess:
             # detect both of logo and obj: {15:obj, 16:logo}
             if 15 in results[0] and 16 in results[0]:
                 detected_frame, crop_logo, bb = self.yolo_bb_obj(results, img_org, classes=self.obj_classes)
+                crop_logo = np.ascontiguousarray(crop_logo)
                 return True, detected_frame, crop_logo, bb
             else:
-                return False, img_org, self.waited_capture, self.bb
+                return False, img_org, self.waited_capture, (0, 0, 0, 0)
         except Exception as e:
             print(e, "-obj process")
 
@@ -165,3 +165,27 @@ def save_image(path, image):
 
 def read_image(path):
     return cv2.imread(path)
+
+
+# -----------------------------------------------------------
+# 5. Detect logo of object process
+class LogoProcess:
+    def __init__(self):
+        # load size model
+        self.logo_model = load_model_json.load('models/logo.json', "models/logo.h5")
+
+        # Initialize HoG descriptor
+        self.hog = cv2.HOGDescriptor((64, 64), (16, 16), (8, 8), (8, 8), 9)
+
+    def logo_detector(self, logo):
+        logo_image = cv2.resize(logo, (64, 64))
+        logo_gray_image = cv2.cvtColor(logo_image, cv2.COLOR_BGR2GRAY)
+        logo_features = self.hog.compute(logo_gray_image)
+        features = np.array(logo_features).reshape(-1)
+        prediction = self.logo_model.predict(np.expand_dims(features, axis=0), verbose=0)
+        if prediction < 0.5:
+            cv2.putText(logo, "Normal", (5, 20), cv2.FONT_HERSHEY_PLAIN, 0.7, (0, 255, 0), 1, cv2.LINE_AA)
+            return "not error"
+        else:
+            cv2.putText(logo, "Error", (5, 20), cv2.FONT_HERSHEY_PLAIN, 0.7, (0, 0, 255), 1, cv2.LINE_AA)
+            return "error"

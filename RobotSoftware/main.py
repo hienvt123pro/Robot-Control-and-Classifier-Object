@@ -6,7 +6,7 @@ from PySide2 import QtCore
 from GUI import gui
 from communicate import serialCom1, receive_thread_1, serialCom2, receive_thread_2
 from camera import mycam
-from detect import SizeAndColorProcess, ObjectProcess, draw_working_area, save_image, read_image
+from detect import SizeAndColorProcess, ObjectProcess, draw_working_area, save_image, read_image, LogoProcess
 from find_feature import find_features
 from preprocessing import preprocessing_img
 from database import robot_database, product_database
@@ -19,9 +19,7 @@ import threading
 import matplotlib.pyplot as plt
 import datetime
 import os
-
-
-# import time
+import time
 
 
 class MainWindow:
@@ -36,7 +34,7 @@ class MainWindow:
         self.isCalibSizeModelMode = False
         self.isSizeCalibModel = False
         self.isTestCalibSizeModel = False
-        self.detect_result = ['', '']
+        self.detect_result = ['', '', '']
         self.product_result = ''
         self.center_result = [0, 0, 1]
         self.pick_place = tuple([0, 0, 0])
@@ -56,6 +54,7 @@ class MainWindow:
         self.isRunConveyor = False
         self.isReadSpeedMode = False
         self.isApplyRF = False
+        self.detect_time = 0
 
         # Timer Interrupt
         self.timer = QtCore.QTimer()
@@ -726,39 +725,43 @@ class MainWindow:
                         break
 
                     # Detect frames
-                    # start_time = time.time()
+                    start_time = time.time()
                     image = mycam.get_frames()
-                    isObject, obj, logo, bbox = object_processing.obj_detector_process(image)
+                    isObject, obj_view, logo_view, bbox = object_processing.obj_detector_process(image)
 
                     self.image_error_product = image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
                     if self.isShowArea:
-                        obj = draw_working_area(obj, self.rectangleArea)
-                    self.uic.obj_view.setPixmap(self.convert_cv_qt(obj, 600, 450))
+                        obj_view = draw_working_area(obj_view, self.rectangleArea)
+                    self.uic.obj_view.setPixmap(self.convert_cv_qt(obj_view, 600, 450))
 
                     if isObject:
-                        size, size_result, color_result, center_x, center_y = sz_color_processing.detect_size_color(
+                        size_view, size_result, color_result, center_x, center_y = sz_color_processing.detect_size_color(
                             image, bbox[0], bbox[1], bbox[2], bbox[3])
-                        self.uic.size_view.setPixmap(self.convert_cv_qt(size, 600, 450))
+                        self.uic.size_view.setPixmap(self.convert_cv_qt(size_view, 600, 450))
+
+                        logo_result = logo_processing.logo_detector(logo_view)
+                        self.uic.logo_view.setPixmap(self.convert_cv_qt(logo_view, 200, 200))
 
                         if self.isPreviewMode or self.isRobotAvailable:
                             # 2D center result of object
                             self.center_result[0] = center_x
                             self.center_result[1] = center_y
 
-                            # size, color detection results
-                            self.detect_result = [size_result, color_result]
+                            # size, color, logo detection results
+                            self.detect_result = [size_result, color_result, logo_result]
+                            self.product_result, self.index_type = self.result_of_product(size_result,
+                                                                                          color_result, logo_result)
 
                             # convert 2D center to 3D center
-                            self.product_result, self.index_type = self.result_of_product(size_result, color_result)
                             if not self.isAutoMode:
                                 self.pick_place = camera_calib.findPerspective3DCoors(self.center_result)
                             else:
                                 self.temp_pick_place = camera_calib.findPerspective3DCoors(self.center_result)
 
                         # Free up memory of images and pixmap
-                        del size
-                        del obj
-                        del logo
+                        del size_view
+                        del obj_view
+                        del logo_view
                         del image
                     else:
                         sz_color_processing.uncertain_algorithm.reset_bel()
@@ -766,11 +769,11 @@ class MainWindow:
                         self.uic.size_view.setPixmap(self.convert_cv_qt(object_processing.waited_capture, 400, 400))
 
                         # Free up memory of images and pixmap
-                        del logo
+                        del logo_view
                         del image
 
-                    # end_time = time.time()
-                    # print("Time of models is:", end_time - start_time, "sec")
+                    end_time = time.time()
+                    self.detect_time = end_time - start_time
 
                     # Auto mode on
                     if self.isAutoMode:
@@ -833,12 +836,15 @@ class MainWindow:
 
                                         # edit data
                                         self.product_index += 1
-                                        sz, color = '', ''
+                                        sz, color, logo = '', '', ''
                                         if self.detect_result[0] == "error":
                                             sz = "Size Error"
                                         if self.detect_result[1] == "error":
                                             color = "Color Error"
-                                        self.note = sz + "/" + color if sz and color else sz or color
+                                        if self.detect_result[2] == "error":
+                                            logo = "Logo Error"
+                                        errors = [s for s in [sz, color, logo] if s != '']
+                                        self.note = '/'.join(errors) if len(errors) > 0 else ''
 
                                         # save error product image
                                         save_image(f"error_product/SP{self.product_index:04d}_"
@@ -947,6 +953,9 @@ class MainWindow:
         """
         Timer interrupt 1s
         """
+        # show detected time
+        self.uic.lb_detect_time.setText(f"Time: {round(self.detect_time, 5)}s")
+
         # show size result
         if self.detect_result[0] == 'error':
             self.uic.res_size.setStyleSheet("background: rgb(255,0,0);")
@@ -1017,15 +1026,17 @@ class MainWindow:
                 self.t += 1
 
     @staticmethod
-    def result_of_product(size, color):
+    def result_of_product(size, color, logo):
         """
         :param size: size of product
         :param color: color of product
+        :param logo: logo of product
         :return: Result of Product, Index of size type
         """
         size_dict = {'16': 1, '18': 2, '20': 3, 'error': 4}
         color_dict = {'Red': 0, 'Yellow': 1, 'error': 2}
-        if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2:
+        logo_dict = {'not error': 0, 'error': 1}
+        if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2 or logo_dict.get(logo, None) == 1:
             return 'Error', 4
         return 'Not Error', size_dict.get(size, None)
 
@@ -1561,6 +1572,9 @@ if __name__ == '__main__':
 
     # load yolov5 model
     object_processing = ObjectProcess()
+
+    # load logo svm model
+    logo_processing = LogoProcess()
 
     app = QApplication(sys.argv)
     self = MainWindow()
