@@ -60,7 +60,7 @@ def find_features(img_org, img_contour):
                 M = cv2.moments(best_contour)
                 cX = int(M["m10"] / M["m00"])
                 cY = int(M["m01"] / M["m00"])
-                cv2.circle(img_origin, (cX, cY), 4, (255, 0, 0), -1)
+                cv2.circle(img_origin, (cX, cY), 5, (255, 0, 0), -1)
                 center[:, 0] = cX
                 center[:, 1] = cY
 

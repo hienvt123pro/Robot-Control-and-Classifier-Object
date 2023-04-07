@@ -1203,6 +1203,8 @@ class MainWindow:
                 reply = self.msg.exec()
                 if reply == QMessageBox.Ok:
                     camera_calib.delete_files_images_folder()
+                else:
+                    camera_calib.counter_shot_img = num_files + 1
 
             if mycam.connect_cam():
                 self.uic.btn_calib_mode_cam.setText("Off Mode")
@@ -1237,10 +1239,12 @@ class MainWindow:
                     isCheckerBoard, show_img, save_img = camera_calib.detect_checker_board(image)
                     self.uic.calib_cam_view.setPixmap(self.convert_cv_qt(show_img, 720, 530))
 
+                    del show_img
+
                     if self.isTakeShot:
+                        _ = camera_calib.save_images(isCheckerBoard, save_img)
                         self.isTakeShot = False
-                        saved_info = camera_calib.save_images(isCheckerBoard, save_img)
-                        self.uic.txt_info_calib_cam.setText(saved_info)
+                        del save_img
 
                     if not self.isCalibCamMode:
                         self.uic.calib_cam_view.clear()
@@ -1552,16 +1556,17 @@ class MainWindow:
         self.uic.lb_quantity.setText(f"Quantity: {count}")
 
     def handle_cell_clicked(self, row, col):
-        item = self.uic.tableWidget.item(row, col)
-        search_name = item.text()[:6] + '_'
-        folder = 'error_product'
-        for file_name in os.listdir(folder):
-            if search_name in file_name:
-                path = os.path.join(folder, file_name)
-                image = read_image(path)
-                self.uic.error_product_view.setPixmap(self.convert_cv_qt(image, 480, 670))
-                del image
-                return
+        if col == 1:
+            item = self.uic.tableWidget.item(row, col)
+            search_name = item.text()[:6] + '_'
+            folder = 'error_product'
+            for file_name in os.listdir(folder):
+                if search_name in file_name:
+                    path = os.path.join(folder, file_name)
+                    image = read_image(path)
+                    self.uic.error_product_view.setPixmap(self.convert_cv_qt(image, 480, 670))
+                    del image
+                    return
 
     # endregion
 
