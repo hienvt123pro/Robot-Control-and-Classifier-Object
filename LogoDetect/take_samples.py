@@ -73,7 +73,7 @@ while True:
     key = cv2.waitKey(1)
     if key == ord('q'):
         if isObject:
-            cv2.imwrite(f"datasets/error/lo2_{count}.jpg", logo)
+            cv2.imwrite(f"datasets/not_error/lo07_{count}.jpg", logo)
             print(f"Image: {count}")
             count += 1
     if key == ord('e'):

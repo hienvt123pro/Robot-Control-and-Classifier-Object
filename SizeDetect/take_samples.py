@@ -76,7 +76,7 @@ vid = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 count = 1
 d1, d2, d3 = 0, 0, 0
 label = [0, 1, 2, 3]  # sz 16, sz18, sz20, error
-print("LABEL-->  0: sz16 | 1: sz18 | 2: sz20 | 3: error")
+print("LABEL-->  0: sz30 | 1: sz31 | 2: sz32 | 3: error")
 index_label = 0
 
 while True:
@@ -84,14 +84,14 @@ while True:
     _, (x1, y1, x2, y2) = detect_object(img)
 
     obj_img, pre_img = preprocessing_img(img, (x1, y1, x2, y2))
-    obj_img, cen, d1, d2, d3 = find_features(obj_img, pre_img)
+    # obj_img, cen, d1, d2, d3 = find_features(obj_img, pre_img)
 
-    cv2.imshow("org", obj_img)
+    cv2.imshow("org", pre_img)
 
     key = cv2.waitKey(1)
     if key == ord('q'):
         """ save data to Excel """
-        print('- Read a new frame {} with f1={}, f2={}, f3={}, center={}'.format(count, d1, d2, d3, cen))
+        # print('- Read a new frame {} with f1={}, f2={}, f3={}, center={}'.format(count, d1, d2, d3, cen))
         print('  label: {}'.format(index_label))
         create_workbook("new_datasets/train/size_data.xlsx", count + 1, d1, d2, d3, index_label)  # change path for train or test purpose
         count = count + 1

@@ -1,1 +1,4 @@
 pyside2-uic GUI/gui.ui -o GUI/gui.py
+pyside2-uic GUI/gui_camera.ui -o GUI/gui_camera.py
+pyside2-uic GUI/gui_size.ui -o GUI/gui_size.py
+pyside2-uic GUI/gui_speed.ui -o GUI/gui_speed.py

@@ -2,8 +2,8 @@
 Provide functions, class for processing models (yolov5, size ANN, color CNN, logo ANN depend on HoG feature)
 """
 
-from find_feature import find_features
-from preprocessing import preprocessing_img
+from find_feature import ffeats
+from preprocessing import preprocessing_obj, preprocessing_logo
 from size_uncertainty import SizeProbabilistic
 import load_model_json
 import joblib
@@ -34,6 +34,7 @@ class ObjectProcess:
         x_shape, y_shape = frame.shape[1], frame.shape[0]
         cropped_logo = self.waited_capture
         bbox = (0, 0, 0, 0)
+        center_logo = [0, 0]
         for i in range(len(labels)):
             row = cord[i]
             x1, y1, x2, y2 = int(row[0] * x_shape), int(row[1] * y_shape), int(row[2] * x_shape), int(row[3] * y_shape)
@@ -43,12 +44,13 @@ class ObjectProcess:
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f" {round(float(row[4]), 2)}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                             (255, 255, 255), 2)
+                center_logo = [int((x1 + x2) / 2), int((y1 + y2) / 2)]
             elif cls == 'dep':
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
                 cv2.putText(frame, f" {round(float(row[4]), 2)}", (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                             (255, 255, 255), 2)
                 bbox = (x1, y1, x2, y2)
-        return frame, cropped_logo, bbox
+        return frame, cropped_logo, bbox, center_logo
 
     def obj_detector_process(self, input_queue):
         try:
@@ -57,11 +59,12 @@ class ObjectProcess:
 
             # detect both of logo and obj: {15:obj, 16:logo}
             if 15 in results[0] and 16 in results[0]:
-                detected_frame, crop_logo, bb = self.yolo_bb_obj(results, img_org, classes=self.obj_classes)
+                detected_frame, crop_logo, bb, centerLogo = self.yolo_bb_obj(results, img_org, classes=self.obj_classes)
                 crop_logo = np.ascontiguousarray(crop_logo)
-                return True, detected_frame, crop_logo, bb
+                crop_logo = cv2.resize(crop_logo, (124, 124))
+                return True, detected_frame, crop_logo, bb, centerLogo
             else:
-                return False, img_org, self.waited_capture, (0, 0, 0, 0)
+                return False, img_org, self.waited_capture, (0, 0, 0, 0), [0, 0]
         except Exception as e:
             print(e, "-obj process")
 
@@ -92,7 +95,7 @@ class SizeAndColorProcess:
     # result functions for size and color model
     @staticmethod
     def size_result(y):
-        size_dict = {0: '16', 1: '18', 2: '20', 3: 'error'}
+        size_dict = {0: '30', 1: '31', 2: '32', 3: 'error'}
         return size_dict.get(y, None)
 
     @staticmethod
@@ -111,8 +114,8 @@ class SizeAndColorProcess:
 
     # detect both size and color
     def detect_size_color(self, I, bb_x1, bb_y1, bb_x2, bb_y2):
-        img_org, img_contour = preprocessing_img(I, (bb_x1, bb_y1, bb_x2, bb_y2))
-        img, center, d1, d2, d3 = find_features(img_org, img_contour)
+        img_org, img_contour = preprocessing_obj(I, (bb_x1, bb_y1, bb_x2, bb_y2))
+        img, center, d1, d2, d3 = ffeats.find_size_features(img_org, img_contour)
 
         # calib features
         d1, d2, d3 = d1 * self.cf1, d2 * self.cf2, d3 * self.cf3
@@ -178,14 +181,60 @@ class LogoProcess:
         self.hog = cv2.HOGDescriptor((64, 64), (16, 16), (8, 8), (8, 8), 9)
 
     def logo_detector(self, logo):
-        logo_image = cv2.resize(logo, (64, 64))
+        """
+        :param logo: 124x124
+        :return: result of logo
+        """
+
+        logo_detected = logo.copy()
+
+        # check location
+        result_location = ffeats.find_logo_locate_features()
+        ffeats.cor_part1 = []
+        ffeats.cor_part3 = []
+        if result_location == "error":
+            cv2.putText(logo, "Location Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+            return "location error"
+        elif result_location == 'none':
+            return 'none'
+
+        # check direction
+        if int(ffeats.center_obj[0, 0]) != 0:
+            lines = preprocessing_logo(logo_detected)
+            vecto_logo, x1, y1, x2, y2 = ffeats.find_logo_direct_features(lines)
+            vecto_obj = [int(ffeats.center_obj[0, 0]) - ffeats.center_logo[0],
+                         int(ffeats.center_obj[0, 1]) - ffeats.center_logo[1]]
+            if vecto_logo[0] != 0:
+                angle = self.angle_between(np.array(vecto_obj), np.array(vecto_logo))
+                if ffeats.isShowLogoFeats:
+                    cv2.line(logo, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                    cv2.putText(logo, str(round(float(angle), 2)), (10, 30), cv2.FONT_HERSHEY_PLAIN, 0.7,
+                                (255, 0, 0), 1, cv2.LINE_AA)
+                if not (82 < angle < 96):
+                    cv2.putText(logo, "Direction Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+                    return "direction error"
+            else:
+                return 'none'
+        else:
+            return 'none'
+
+        # check lost ink
+        logo_image = cv2.resize(logo_detected, (64, 64))
         logo_gray_image = cv2.cvtColor(logo_image, cv2.COLOR_BGR2GRAY)
         logo_features = self.hog.compute(logo_gray_image)
         features = np.array(logo_features).reshape(-1)
         prediction = self.logo_model.predict(np.expand_dims(features, axis=0), verbose=0)
         if prediction < 0.5:
-            cv2.putText(logo, "Normal", (5, 20), cv2.FONT_HERSHEY_PLAIN, 0.7, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(logo, "Normal", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 255, 0), 1, cv2.LINE_AA)
             return "not error"
         else:
-            cv2.putText(logo, "Error", (5, 20), cv2.FONT_HERSHEY_PLAIN, 0.7, (0, 0, 255), 1, cv2.LINE_AA)
-            return "error"
+            cv2.putText(logo, "Ink Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+            return "ink error"
+
+    @staticmethod
+    def angle_between(v1, v2):
+        v1_unit = v1 / np.linalg.norm(v1)
+        v2_unit = v2 / np.linalg.norm(v2)
+        dot_product = np.dot(v1_unit, v2_unit)
+        angle = np.arccos(dot_product)
+        return np.degrees(angle)

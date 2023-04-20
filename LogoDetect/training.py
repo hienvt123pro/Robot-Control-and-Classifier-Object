@@ -29,22 +29,32 @@ for filename in os.listdir(error_path):
 data = []
 labels = []
 for i in range(len(normal_images)):
-    # Convert normal and error images to grayscale
+    # Convert normal images to grayscale
     normal_gray_image = cv2.cvtColor(normal_images[i], cv2.COLOR_BGR2GRAY)
-    error_gray_image = cv2.cvtColor(error_images[i], cv2.COLOR_BGR2GRAY)
 
-    # Compute HoG descriptors for normal and error logo images
+    # Compute HoG descriptors for normal logo images
     normal_features = hog.compute(normal_gray_image)
     normal_features = np.array(normal_features).reshape(-1)
 
+    # Append HoG descriptors and labels to data array
+    data.append(normal_features)
+    labels.append(0)
+
+print("Normal image: ", len(normal_images))
+
+for i in range(len(error_images)):
+    # Convert error images to grayscale
+    error_gray_image = cv2.cvtColor(error_images[i], cv2.COLOR_BGR2GRAY)
+
+    # Compute HoG descriptors for error logo images
     error_features = hog.compute(error_gray_image)
     error_features = np.array(error_features).reshape(-1)
 
     # Append HoG descriptors and labels to data array
-    data.append(normal_features)
     data.append(error_features)
-    labels.append(0)
     labels.append(1)
+
+print("Error image: ", len(error_images))
 
 # Convert data and labels to numpy arrays
 data = np.array(data)

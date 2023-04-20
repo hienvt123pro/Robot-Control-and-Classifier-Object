@@ -1,0 +1,28 @@
+--cpu Cortex-M3
+"control_speed_1\startup_stm32f103xb.o"
+"control_speed_1\main.o"
+"control_speed_1\gpio.o"
+"control_speed_1\dma.o"
+"control_speed_1\tim.o"
+"control_speed_1\usart.o"
+"control_speed_1\stm32f1xx_it.o"
+"control_speed_1\stm32f1xx_hal_msp.o"
+"control_speed_1\stm32f1xx_hal_gpio_ex.o"
+"control_speed_1\stm32f1xx_hal_tim.o"
+"control_speed_1\stm32f1xx_hal_tim_ex.o"
+"control_speed_1\stm32f1xx_hal.o"
+"control_speed_1\stm32f1xx_hal_rcc.o"
+"control_speed_1\stm32f1xx_hal_rcc_ex.o"
+"control_speed_1\stm32f1xx_hal_gpio.o"
+"control_speed_1\stm32f1xx_hal_dma.o"
+"control_speed_1\stm32f1xx_hal_cortex.o"
+"control_speed_1\stm32f1xx_hal_pwr.o"
+"control_speed_1\stm32f1xx_hal_flash.o"
+"control_speed_1\stm32f1xx_hal_flash_ex.o"
+"control_speed_1\stm32f1xx_hal_exti.o"
+"control_speed_1\stm32f1xx_hal_uart.o"
+"control_speed_1\system_stm32f1xx.o"
+--strict --scatter "Control_speed_1\Control_speed_1.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "Control_speed_1.map" -o Control_speed_1\Control_speed_1.axf

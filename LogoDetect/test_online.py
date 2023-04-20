@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from keras.models import model_from_json
 
+
 # --------------------------------
 # 1. Load yolov5 model and some functions for running the model
 obj_model = torch.hub.load('ultralytics/yolov5', 'custom', path='yolov5_model/obj.pt', force_reload=True)
@@ -24,10 +25,10 @@ def yolo_bb_obj(result, frame, classes):
     x_shape, y_shape = frame.shape[1], frame.shape[0]
     cropped_logo = None
     bbox = (0, 0, 0, 0)
-    for i in range(len(labels)):
-        row = cord[i]
+    for index in range(len(labels)):
+        row = cord[index]
         x1, y1, x2, y2 = int(row[0] * x_shape), int(row[1] * y_shape), int(row[2] * x_shape), int(row[3] * y_shape)
-        cls = classes[int(labels[i])]
+        cls = classes[int(labels[index])]
         if cls == 'logo':
             cropped_logo = frame[y1 + 3:y2 - 3, x1 + 3:x2 - 3]
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -65,6 +66,15 @@ vid = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 # Initialize HoG descriptor
 hog = cv2.HOGDescriptor((64, 64), (16, 16), (8, 8), (8, 8), 9)  # 1764 features
 
+
+def angle_between(v1, v2):
+    v1_unit = v1 / np.linalg.norm(v1)
+    v2_unit = v2 / np.linalg.norm(v2)
+    dot_product = np.dot(v1_unit, v2_unit)
+    angle = np.arccos(dot_product)
+    return np.degrees(angle)
+
+
 # load json and create model
 json_file = open("output_models/logo.json", 'r')
 loaded_model_json = json_file.read()
@@ -76,28 +86,31 @@ loaded_model.load_weights("output_models/logo.h5")
 
 while True:
     _, img = vid.read()
-    isObject, yolo_img, logo, _ = detect_object(img)
+    isObject, yolo_img, logo, _, vec1, length = detect_object(img)
+    vec2 = [0, 0]
 
     cv2.imshow("img", yolo_img)
     if isObject:
-        logo = cv2.resize(logo, (124, 124))
         cv2.imshow("logo", logo)
 
     key = cv2.waitKey(1)
     if key == ord('q'):
-        t1 = time.time()
-        # Convert normal and error images to grayscale
-        gray_image = cv2.cvtColor(cv2.resize(logo, (64, 64)), cv2.COLOR_BGR2GRAY)
+        if isObject:
+            t1 = time.time()
+            # Convert normal and error images to grayscale
+            gray_image = cv2.cvtColor(cv2.resize(logo, (64, 64)), cv2.COLOR_BGR2GRAY)
 
-        # Compute HoG descriptors for normal and error logo images
-        features = hog.compute(gray_image)
-        features = np.array(features).reshape(-1)
-        prediction = loaded_model.predict(np.expand_dims(features, axis=0))
-        if prediction < 0.5:
-            print("not error")
-        else:
-            print("error")
-        print("Runtime: ", time.time() - t1)
+            # Compute HoG descriptors for normal and error logo images
+            features = hog.compute(gray_image)
+            features = np.array(features).reshape(-1)
+
+            prediction = loaded_model.predict(np.expand_dims(features, axis=0))
+            if prediction < 0.5:
+                print("not error")
+            else:
+                print("error")
+            print("Runtime: ", time.time() - t1)
+
     if key == ord('e'):
         vid.release()
         cv2.destroyAllWindows()

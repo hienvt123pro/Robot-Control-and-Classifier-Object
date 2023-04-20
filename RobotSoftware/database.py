@@ -1,3 +1,4 @@
+import os
 import psycopg2
 import psycopg2.extras
 import pandas as pd
@@ -81,6 +82,12 @@ class ProductDatabase(PostgresDatabase):
 
     def __init__(self):
         super().__init__()
+        self.dirs = ["error_product", "export"]
+
+    def check_dir(self):
+        for d in self.dirs:
+            if not os.path.isdir(d):
+                os.makedirs(d)
 
     def save_into_database(self, datetime, name, product, size, color, note):
         cnt = psycopg2.connect(dbname=self.DB_NAME, user=self.DB_USER, password=self.DB_PASS, host=self.DB_HOST)

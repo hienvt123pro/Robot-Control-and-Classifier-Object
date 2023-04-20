@@ -17,7 +17,7 @@ kernel_mean = 1 / 9 * np.array([[1, 1, 1],
 CONVEYOR_BG_MASK = joblib.load('data/bg_mask.save')  # 640x480
 
 
-def preprocessing_img(img, bb: tuple, half_size=(320, 240)):
+def preprocessing_obj(img, bb: tuple, half_size=(320, 240)):
     # resize the image
     bb = (int(bb[0] * half_size[0] / img.shape[1]),
           int(bb[1] * half_size[1] / img.shape[0]),
@@ -58,3 +58,16 @@ def preprocessing_img(img, bb: tuple, half_size=(320, 240)):
     output_Step4 = cv2.medianBlur(output_Step3, 5)
 
     return img_org, output_Step4
+
+
+def preprocessing_logo(logo_img):
+    logo = cv2.resize(logo_img, (124, 124))
+    logo_gray = cv2.cvtColor(logo, cv2.COLOR_BGR2GRAY)
+    _, logo_thresh = cv2.threshold(logo_gray, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    edges = cv2.Sobel(logo_thresh, cv2.CV_64F, dx=0, dy=1, ksize=3)
+
+    # # Apply Hough Transform
+    edges_uint8 = cv2.convertScaleAbs(edges)
+    lines = cv2.HoughLinesP(edges_uint8, rho=1, theta=np.pi / 180, threshold=15, minLineLength=47, maxLineGap=2)
+    return lines

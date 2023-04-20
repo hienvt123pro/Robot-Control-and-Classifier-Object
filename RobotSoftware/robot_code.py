@@ -38,6 +38,7 @@ class RobotCode:
         self.RUNCONVEY = '7,0,'
         self.STOPCONVEY = "7,1,"
         self.READSPEED = "8,0,"
+        self.ERROR_SIZE = "9,0,"
 
     def concatenate(self, dev: str, cmd: str, data: list):
         if not data:

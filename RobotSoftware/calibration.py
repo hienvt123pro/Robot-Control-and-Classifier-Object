@@ -29,7 +29,7 @@ class SizeCalib:
     def __init__(self):
         self.calib_16m = joblib.load("data/mean_16.save")
 
-        # size 16 mean data feature, from 'data/mean16.save'
+        # size 16 (or 30) mean data feature, from 'data/mean16.save'
         self.d1_0, self.d2_0, self.d3_0 = self.calib_16m[0], self.calib_16m[1], self.calib_16m[2]
 
         self.cf1, self.cf2, self.cf3 = 0, 0, 0
@@ -62,7 +62,7 @@ class SizeCalib:
 
     @staticmethod
     def size_result(y):
-        size_dict = {0: '16', 1: '18', 2: '20', 3: 'error'}
+        size_dict = {0: '30', 1: '31', 2: '32', 3: 'error'}
         return size_dict.get(y, None)
 
 
@@ -301,7 +301,7 @@ class CamCalib:
         """
         try:
             x_real, y_real, z_real = self.convert2Dto3D(self.K_mtx, self.rvecs, self.tvecs, pixel_coors, self.Z)
-            return tuple(round(coor, 2) for coor in (x_real, y_real, 2.5))
+            return tuple(round(coor, 2) for coor in (x_real, y_real, 3.8))
         except Exception as e:
             print(e)
             return 0, 0, 0
@@ -310,7 +310,7 @@ class CamCalib:
         try:
             return cv2.undistort(image, self.K_mtx, self.dist)
         except:
-            return joblib.load("data/logo_cap_wait.save")
+            return cv2.imread("GUI/load_image.png")
 
     def list_model_names(self):
         npz_files = glob.glob(f"{self.calib_dir_path}/*.npz")

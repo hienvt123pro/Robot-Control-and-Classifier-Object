@@ -1,14 +1,14 @@
 from PySide2.QtWidgets import QApplication, QMainWindow, QMessageBox, QGraphicsPixmapItem, QGraphicsScene, \
-    QTableWidgetItem
-from PySide2.QtGui import QIcon, QImage, QPixmap
+    QTableWidgetItem, QDialog
+from PySide2.QtGui import QIcon, QImage, QPixmap, QKeySequence
 from PySide2.QtCore import QSize, Qt
 from PySide2 import QtCore
-from GUI import gui
+from GUI import gui, gui_speed, gui_size, gui_camera
 from communicate import serialCom1, receive_thread_1, serialCom2, receive_thread_2
 from camera import mycam
 from detect import SizeAndColorProcess, ObjectProcess, draw_working_area, save_image, read_image, LogoProcess
-from find_feature import find_features
-from preprocessing import preprocessing_img
+from find_feature import ffeats
+from preprocessing import preprocessing_obj
 from database import robot_database, product_database
 from calibration import size_calib, camera_calib
 from robot_code import robocod
@@ -22,6 +22,17 @@ import os
 import time
 
 
+class Lock:
+    def __init__(self):
+        self.isOpenCam = False
+        self.isCalibSizeModelMode = False
+        self.isCalibCamMode = False
+        self.isTestCamCalibModel = False
+        self.isRunConveyor = False
+        self.isReadSpeedMode = False
+        self.isApplyRF = False
+
+
 class MainWindow:
     def __init__(self):
         self.Control_UI = QMainWindow()
@@ -30,10 +41,6 @@ class MainWindow:
         self.msg = QMessageBox()
         self.buffer = "0,0,0,0,0,0,0,0,0,0,0"
         self.isPortsCnt = False
-        self.isOpenCam = False
-        self.isCalibSizeModelMode = False
-        self.isSizeCalibModel = False
-        self.isTestCalibSizeModel = False
         self.detect_result = ['', '', '']
         self.product_result = ''
         self.center_result = [0, 0, 1]
@@ -47,31 +54,12 @@ class MainWindow:
         self.isRobotAvailable = False
         self.isPreviousRobotAvailable = False
         self.isPreviewMode = True
-        self.isCalibCamMode = False
-        self.isTakeShot = False
-        self.isCalibCam = False
-        self.isTestCamCalibModel = False
-        self.isRunConveyor = False
-        self.isReadSpeedMode = False
-        self.isApplyRF = False
         self.detect_time = 0
 
         # Timer Interrupt
         self.timer = QtCore.QTimer()
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_results)
-
-        # PID graph setting
-        self.scene = QGraphicsScene()
-        self.uic.graphicsView.setScene(self.scene)
-        self.x, self.t = [], 0
-        self.y_pv, self.y_sp = [], []
-        self.fig = plt.figure()
-        self.fig.set_size_inches(550 / 100, 360 / 90)
-        plt.xlabel('time (s)')
-        plt.ylabel('speed conveyor (cm/s)')
-        plt.title("PID Control")
-        plt.ylim([0, 10])
 
         # Working Area
         self.isShowArea = False
@@ -85,6 +73,7 @@ class MainWindow:
         self.note = ""
         self.refresh_sheet()
         self.image_error_product = object_processing.waited_capture
+        product_database.check_dir()
 
         # region robot params
         self.d1 = 12.9
@@ -118,22 +107,18 @@ class MainWindow:
         self.uic.btn_j1_inc.setDisabled(True)
         self.uic.btn_j2_inc.setDisabled(True)
         self.uic.btn_j3_inc.setDisabled(True)
-        self.uic.btn_calib_size.setDisabled(True)
-        self.uic.btn_test_size.setDisabled(True)
         self.uic.btn_savepoint.setDisabled(True)
         self.uic.btn_stop.setDisabled(True)
         self.uic.btn_reset.setDisabled(True)
-        self.uic.btn_calib_mode_cam.setDisabled(True)
-        self.uic.btn_scrshot.setDisabled(True)
-        self.uic.btn_calib_cam.setDisabled(True)
-        self.uic.btn_save_model.setDisabled(True)
+        self.uic.cb_size.setDisabled(True)
+        self.uic.cb_color.setDisabled(True)
         self.uic.cb_com.setToolTip("Choose COM to Robot")
         self.uic.cb_com.setToolTipDuration(10000)
         self.uic.cb_com_2.setToolTip("Choose COM to Conveyor")
         self.uic.cb_com_2.setToolTipDuration(10000)
-        self.uic.btn_Home.setToolTip("Robot go to home position")
+        self.uic.btn_Home.setToolTip("Robot go to home position (H)")
         self.uic.btn_Home.setToolTipDuration(10000)
-        self.uic.btn_calibHome.setToolTip("Calibrate and move robot to home")
+        self.uic.btn_calibHome.setToolTip("Calibrate and move robot to home (Ctrl+H)")
         self.uic.btn_Home.setToolTipDuration(10000)
         self.uic.rbutton_new.setToolTip("Create new teaching point")
         self.uic.rbutton_new.setToolTipDuration(10000)
@@ -141,10 +126,6 @@ class MainWindow:
         self.uic.btn_reset_point.setToolTipDuration(10000)
         self.uic.btn_savepoint.setToolTip("Save the point to database")
         self.uic.btn_savepoint.setToolTipDuration(10000)
-        self.uic.cbox_working_area.setToolTip("Show activated area of robot")
-        self.uic.cbox_working_area.setToolTipDuration(10000)
-        self.uic.btn_apply_rf.setToolTip("Apply the 'pick-place' model and stop PID graph")
-        self.uic.btn_apply_rf.setToolTipDuration(10000)
         self.uic.btn_renew_ports.setToolTip("Refresh COM ports")
         self.uic.btn_renew_ports.setToolTipDuration(10000)
         self.uic.btn_refresh_table.setToolTip("Refresh product data")
@@ -157,22 +138,36 @@ class MainWindow:
         self.uic.btn_stop.setToolTipDuration(10000)
         self.uic.btn_start.setToolTip("Start the preview screen")
         self.uic.btn_start.setToolTipDuration(10000)
-        self.uic.cb_size.setDisabled(True)
-        self.uic.cb_color.setDisabled(True)
+        self.uic.btn_move.setToolTip("M")
+        self.uic.btn_move.setToolTipDuration(10000)
+        self.uic.btn_end_effector.setToolTip("F")
+        self.uic.btn_end_effector.setToolTipDuration(10000)
 
         # endregion
 
         # region events
+        # event open dialog
+        self.uic.actionSize_model.triggered.connect(self.show_size_dialog)
+        self.uic.actionCamera.triggered.connect(self.show_camera_dialog)
+        self.uic.actionSpeed_control.triggered.connect(self.show_speed_dialog)
+        self.uic.actionExit.triggered.connect(self.exit)
+
+        # event menubar
+        self.uic.actionWorking_Area.triggered.connect(self.show_working_area)
+        self.uic.actionSizeFeatures.triggered.connect(self.show_size_feat)
+        self.uic.actionLogoFeatures.triggered.connect(self.show_logo_feat)
+
         # event tableWidget
         self.uic.tableWidget.cellClicked.connect(self.handle_cell_clicked)
 
+        # event text edit
+        self.uic.txt_mX.returnPressed.connect(self.handle_enter_pressed)
+        self.uic.txt_mY.returnPressed.connect(self.handle_enter_pressed)
+        self.uic.txt_mZ.returnPressed.connect(self.handle_enter_pressed)
+
         # event check edit
-        self.uic.cbox_working_area.clicked.connect(self.show_working_area)
         self.uic.cbox_error.clicked.connect(self.filter_error)
         self.uic.cbox_not_error.clicked.connect(self.filter_not_error)
-
-        # event text edit
-        self.uic.txt_setpoint_sp.textChanged.connect(self.sp_convey_changed)
 
         # event combo box
         self.uic.cb_com.activated.connect(self.list_ports1())
@@ -181,11 +176,6 @@ class MainWindow:
         self.uic.cb_point.activated.connect(self.list_points())
         self.uic.cb_point.currentTextChanged.connect(self.changed_point)
         self.uic.cb_sizetype.activated.connect(self.list_sizetype())
-        self.uic.cb_opt_calib_cam.activated.connect(self.list_opt_calib())
-        self.uic.cb_opt_calib_cam.currentTextChanged.connect(self.changed_opt)
-        self.uic.cb_calib_model.activated.connect(self.list_calibrated_model())
-        self.uic.cb_low_area.activated.connect(self.list_low_area())
-        self.uic.cb_high_area.activated.connect(self.list_high_area())
 
         # event push button
         self.uic.btn_cnt.clicked.connect(self.connection)
@@ -210,36 +200,24 @@ class MainWindow:
         self.uic.btn_move.clicked.connect(self.move)
         self.uic.btn_apply.clicked.connect(self.apply_conf)
         self.uic.btn_start.clicked.connect(self.start_cam)
-        self.uic.btn_calib_mode.clicked.connect(self.calib_model_mode)
-        self.uic.btn_calib_size.clicked.connect(self.is_calib)
-        self.uic.btn_test_size.clicked.connect(self.is_test_calib)
         self.uic.rbutton_new.clicked.connect(self.teaching_mode)
         self.uic.btn_savepoint.clicked.connect(self.save_point)
         self.uic.btn_reset_point.clicked.connect(self.reset_point)
         self.uic.btn_run.clicked.connect(self.run)
         self.uic.btn_stop.clicked.connect(self.stop)
         self.uic.btn_reset.clicked.connect(self.reset)
-        self.uic.btn_calib_mode_cam.clicked.connect(self.calib_cam_model)
-        self.uic.btn_scrshot.clicked.connect(self.take_screen_shot)
-        self.uic.btn_calib_cam.clicked.connect(self.is_calib_cam)
-        self.uic.btn_save_model.clicked.connect(self.is_save_cam_calib_model)
-        self.uic.btn_apply_calib_model.clicked.connect(self.apply_calib_cam_model)
-        self.uic.btn_on_cam_test.clicked.connect(self.test_calib_cam_model)
         self.uic.btn_end_effector.clicked.connect(self.end_effector)
-        self.uic.btn_apply_rf.clicked.connect(self.apply_rf_model)
-        self.uic.btn_run_convey.clicked.connect(self.run_conveyor)
         self.uic.btn_next_page.clicked.connect(self.change_page)
         self.uic.btn_refresh_table.clicked.connect(self.refresh_sheet)
         self.uic.btn_export_table.clicked.connect(self.export_sheet_to_excel)
         self.uic.btn_filter.clicked.connect(self.detail_filter)
-        self.uic.btn_clear_graph.clicked.connect(self.clear_graph)
 
         # event slide
         self.uic.slide_speed.valueChanged.connect(self.set_speed)
         self.uic.slide_acc.valueChanged.connect(self.set_accelerate)
         self.uic.slide_deg.valueChanged.connect(self.set_degree)
         self.uic.slide_cm.valueChanged.connect(self.set_centimeters)
-        self.uic.slide_points_test.valueChanged.connect(self.set_num_points)
+
         # endregion
 
     def showMessageBox(self, type_box: QMessageBox, text: str, title: str, standard_button: QMessageBox):
@@ -351,8 +329,17 @@ class MainWindow:
         return text
 
     def reset_point(self):
-        robot_database.delete_on_database()
-        self.uic.txt_info_teaching.setText("\n Clear all data!")
+        self.msg.setIcon(QMessageBox.Warning)
+        self.msg.setText(f"Do you want to reset all teaching points?")
+        self.msg.setWindowTitle("Warning")
+        self.msg.setStandardButtons(QMessageBox.Ok)
+        self.msg.addButton(QMessageBox.Cancel)
+        reply = self.msg.exec()
+        if reply == QMessageBox.Ok:
+            robot_database.delete_on_database()
+            self.uic.txt_info_teaching.setText("\n Clear all data!")
+        else:
+            self.uic.txt_info_teaching.setText("\n Abort resetting!")
 
     def save_point(self):
         self.uic.btn_savepoint.setDisabled(True)
@@ -418,9 +405,6 @@ class MainWindow:
             self.uic.btn_j1_inc.setDisabled(False)
             self.uic.btn_j2_inc.setDisabled(False)
             self.uic.btn_j3_inc.setDisabled(False)
-            self.uic.txt_mX.setText('0')
-            self.uic.txt_mY.setText('0')
-            self.uic.txt_mZ.setText('0')
         else:
             self.showMessageBox(QMessageBox.Warning, "Check your COM Port", "Error", QMessageBox.Ok)
 
@@ -528,6 +512,7 @@ class MainWindow:
             if not isSend:
                 return
             self.uic.btn_end_effector.setText("Off")
+            self.uic.btn_end_effector.setShortcut(QKeySequence("F"))
         else:
             self.buffer = robocod.concatenate(dev="1", cmd=robocod.EFFECTOR, data=None)
             isSend = serialCom1.send_data(self.buffer)
@@ -535,6 +520,7 @@ class MainWindow:
             if not isSend:
                 return
             self.uic.btn_end_effector.setText("On")
+            self.uic.btn_end_effector.setShortcut(QKeySequence("F"))
 
     # endregion
 
@@ -581,14 +567,26 @@ class MainWindow:
     # endregion
 
     # region moving robot
+    def handle_enter_pressed(self):
+        self.uic.txt_mX.clearFocus()
+        self.uic.txt_mY.clearFocus()
+        self.uic.txt_mZ.clearFocus()
+
     def move(self):
-        self.Px = float(self.uic.txt_mX.toPlainText())
-        self.Py = float(self.uic.txt_mY.toPlainText())
-        self.Pz = float(self.uic.txt_mZ.toPlainText())
-        self.uic.txt_x.setText(str(self.Px))
-        self.uic.txt_y.setText(str(self.Py))
-        self.uic.txt_z.setText(str(self.Pz))
-        self.inverseKinematics(px=self.Px, py=self.Py, pz=self.Pz)
+        try:
+            if not self.uic.txt_mX.toPlainText() or not self.uic.txt_mY.toPlainText() or not self.uic.txt_mZ.toPlainText():
+                return
+            self.Px = float(self.uic.txt_mX.toPlainText())
+            self.Py = float(self.uic.txt_mY.toPlainText())
+            self.Pz = float(self.uic.txt_mZ.toPlainText())
+            if self.Px < 5:
+                return
+            self.uic.txt_x.setText(str(self.Px))
+            self.uic.txt_y.setText(str(self.Py))
+            self.uic.txt_z.setText(str(self.Pz))
+            self.inverseKinematics(px=self.Px, py=self.Py, pz=self.Pz)
+        except ValueError:
+            self.showMessageBox(QMessageBox.Warning, "Value Error", "Error", QMessageBox.Ok)
 
     # endregion
 
@@ -689,23 +687,26 @@ class MainWindow:
         icon1.addFile(u"GUI/icon_turn_on.PNG", QSize(), QIcon.Normal, QIcon.Off)
         icon2.addFile(u"GUI/icon_turn_off.PNG", QSize(), QIcon.Normal, QIcon.Off)
         if self.uic.btn_start.text() == " Start Cam":
-            if self.isCalibSizeModelMode or self.isTestCamCalibModel:
+            if lock.isCalibSizeModelMode:
+                self.showMessageBox(QMessageBox.Warning, "Size calibration mode is online", "Error", QMessageBox.Ok)
+                return
+            if lock.isCalibCamMode or lock.isTestCamCalibModel:
                 self.showMessageBox(QMessageBox.Warning, "Camera calibration mode is online", "Error", QMessageBox.Ok)
                 return
             if camera_calib.Z == 0:
-                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found", "Error", QMessageBox.Ok)
+                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found\nGo to 'Tools/Calibration/Camera'",
+                                    "Error", QMessageBox.Ok)
                 return
             if mycam.connect_cam():
                 self.uic.btn_start.setIcon(icon2)
                 self.uic.btn_start.setIconSize(QSize(40, 40))
                 self.uic.btn_start.setText(" Stop Cam")
-                self.isOpenCam = True
+                lock.isOpenCam = True
                 self.uic.lb_info.setText("Start detection models")
                 self.uic.res_size.setStyleSheet("background: rgb(255,255,255);")
-                if not self.timer.isActive():
-                    self.timer.start()
+                self.timer.start()
         else:
-            self.isOpenCam = False
+            lock.isOpenCam = False
             if mycam.disconnect_cam():
                 self.uic.btn_start.setIcon(icon1)
                 self.uic.btn_start.setIconSize(QSize(40, 40))
@@ -718,23 +719,23 @@ class MainWindow:
 
         def display():
             try:
-                while self.isOpenCam:
-                    if self.isCalibSizeModelMode:
-                        self.uic.obj_view.clear()
-                        self.uic.size_view.clear()
-                        break
-
+                while lock.isOpenCam:
                     # Detect frames
                     start_time = time.time()
                     image = mycam.get_frames()
-                    isObject, obj_view, logo_view, bbox = object_processing.obj_detector_process(image)
+                    isObject, obj_view, logo_view, bbox, cenLogo = object_processing.obj_detector_process(image)
 
+                    # save the image if it's an error product
                     self.image_error_product = image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+
+                    # show the working area of robot and decision area of models
                     if self.isShowArea:
                         obj_view = draw_working_area(obj_view, self.rectangleArea)
-                    self.uic.obj_view.setPixmap(self.convert_cv_qt(obj_view, 600, 450))
 
+                    self.uic.obj_view.setPixmap(self.convert_cv_qt(obj_view, 600, 450))
                     if isObject:
+                        ffeats.center_logo = cenLogo
+
                         size_view, size_result, color_result, center_x, center_y = sz_color_processing.detect_size_color(
                             image, bbox[0], bbox[1], bbox[2], bbox[3])
                         self.uic.size_view.setPixmap(self.convert_cv_qt(size_view, 600, 450))
@@ -792,21 +793,25 @@ class MainWindow:
                             # read buffer -> validate robot is available? then check product is not error or error
                             if self.isRobotAvailable:
                                 # check center point (pick place) is in range of conveyor working-place
-                                # 14 < 'x_coor' < 24 (centi) and 'y_coor' in working area of model RandomForest
-                                if 14 < self.temp_pick_place[0] < 24 and \
+                                # 14 < 'x_coor' < 22 (cen) and 'y_coor' in working area of model RandomForest
+                                if 14 < self.temp_pick_place[0] < 22 and \
                                         rfPoint.LOW_WORKING_Y_AREA < self.temp_pick_place[1] < rfPoint.HIGH_WORKING_Y_AREA:
                                     # check the product is not error
                                     if self.product_result == "Not Error":
                                         # predicting center point (pick place) depend on machine learning algorithm
-                                        if self.isRunConveyor and self.isApplyRF:
+                                        if lock.isRunConveyor and lock.isApplyRF:
+                                            rfPoint.SYS_DELAY_TIME = rfPoint.T_ROBOT + round(self.detect_time, 4) \
+                                                                     + rfPoint.T_RF
                                             y_new = rfPoint.predict_new_point(self.temp_pick_place[1],
-                                                                              rfPoint.AVERAGE_SYS_DELAY_TIME)
+                                                                              rfPoint.SYS_DELAY_TIME)
+                                            # y_new = round(self.temp_pick_place[1] + (1.8 + round(self.detect_time, 4))
+                                            #               * rfPoint.CONVEYOR_VELOCITY, 2)
                                             self.pick_place = (self.temp_pick_place[0], y_new, self.temp_pick_place[2])
                                         else:
                                             self.pick_place = self.temp_pick_place
 
                                         # validate the drop place
-                                        # index is {'size16': 1, 'size18': 2, 'size20': 3, 'error': 4}
+                                        # index is {'size30': 1, 'size31': 2, 'size32': 3, 'error': 4}
                                         teaching_point = self.type_dict.get(self.index_type)
                                         self.drop_place = tuple(self.coordinate_dict.get(teaching_point))
 
@@ -838,11 +843,18 @@ class MainWindow:
                                         self.product_index += 1
                                         sz, color, logo = '', '', ''
                                         if self.detect_result[0] == "error":
+                                            self.buffer = robocod.concatenate(dev="2", cmd=robocod.ERROR_SIZE, data=None)
+                                            isSend = serialCom2.send_data(self.buffer)
+                                            self.check_sending(isSend)
                                             sz = "Size Error"
                                         if self.detect_result[1] == "error":
                                             color = "Color Error"
-                                        if self.detect_result[2] == "error":
-                                            logo = "Logo Error"
+                                        if self.detect_result[2] == "location error":
+                                            logo = "Logo Location Error"
+                                        elif self.detect_result[2] == "direction error":
+                                            logo = "Logo Direction Error"
+                                        else:
+                                            logo = "Logo Ink Error"
                                         errors = [s for s in [sz, color, logo] if s != '']
                                         self.note = '/'.join(errors) if len(errors) > 0 else ''
 
@@ -857,89 +869,40 @@ class MainWindow:
         display_thread = threading.Thread(target=display)
         display_thread.start()
 
-    def calib_model_mode(self):
-        if self.uic.btn_calib_mode.text() == "On Mode":
-            if not self.isOpenCam:
-                self.showMessageBox(QMessageBox.Warning, "Check your Camera", "Error", QMessageBox.Ok)
-                return
-            self.isCalibSizeModelMode = True
-            self.uic.btn_calib_size.setDisabled(False)
-            self.uic.btn_test_size.setDisabled(False)
-            self.uic.btn_calib_mode.setText("Off Mode")
-            self.uic.btn_calib_mode.setStyleSheet("background: rgb(0,255,0);")
-            self.uic.btn_start.setDisabled(True)
-            self.uic.lb_info.setText("Start calibrating size model\nInsert standard size 16 object")
-        else:
-            self.isCalibSizeModelMode = False
-            self.uic.btn_calib_size.setDisabled(True)
-            self.uic.btn_test_size.setDisabled(True)
-            self.uic.btn_calib_mode.setText("On Mode")
-            self.uic.btn_calib_mode.setStyleSheet("background: rgb(235,235,235);")
-            self.uic.btn_start.setDisabled(False)
-            self.uic.lb_info.setText("Stop calibrating size model\nRestart camera to detect")
-
-        def display():
-            try:
-                while self.isCalibSizeModelMode:
-                    if self.isOpenCam:
-                        image = mycam.get_frames()
-                        isObject, _, _, bbox = object_processing.obj_detector_process(image)
-                        if isObject:
-                            x1, y1, x2, y2 = bbox[0], bbox[1], bbox[2], bbox[3]
-                            img_org, img_contour = preprocessing_img(image, (x1, y1, x2, y2))
-                            img, _, d1, d2, d3 = find_features(img_org, img_contour)
-                            self.uic.size_view.setPixmap(self.convert_cv_qt(img, 600, 450))
-
-                            if self.isSizeCalibModel:
-                                self.isSizeCalibModel = False
-                                size_calib.convert(d1, d2, d3)
-                                sz_color_processing.cf1 = size_calib.cf1
-                                sz_color_processing.cf2 = size_calib.cf2
-                                sz_color_processing.cf3 = size_calib.cf3
-                                self.detect_result[0] = ''
-
-                            if self.isTestCalibSizeModel:
-                                self.isTestCalibSizeModel = False
-                                result = size_calib.test(d1, d2, d3)
-                                self.detect_result[0] = result
-                        else:
-                            self.uic.size_view.setPixmap(self.convert_cv_qt(image, 600, 450))
-                            self.isTestCalibSizeModel = False
-                            self.isSizeCalibModel = False
-
-                if not self.isCalibSizeModelMode:
-                    self.uic.size_view.clear()
-
-            except Exception as e:
-                print(e)
-
-        display_thread = threading.Thread(target=display)
-        display_thread.start()
-
-    def is_calib(self):
-        self.isSizeCalibModel = True
-        self.uic.lb_info.setText("Calibrated")
-
-    def is_test_calib(self):
-        self.isTestCalibSizeModel = True
-        self.uic.lb_info.setText("Test new calibrated model")
-
     def show_working_area(self):
-        if self.uic.cbox_working_area.isChecked():
+        if not self.isShowArea:
             if camera_calib.Z == 0:
-                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found", "Error", QMessageBox.Ok)
-                self.uic.cbox_working_area.setChecked(False)
+                self.showMessageBox(QMessageBox.Warning,
+                                    "Calibration model is not found\nGo to 'Tools/Calibration/Camera'",
+                                    "Error", QMessageBox.Ok)
+                self.uic.actionWorking_Area.setChecked(False)
                 return
             world_area = [(24, rfPoint.HIGH_WORKING_Y_AREA, 0), (24, rfPoint.LOW_WORKING_Y_AREA, 0),
-                          (14, rfPoint.LOW_WORKING_Y_AREA, 0), (14, rfPoint.HIGH_WORKING_Y_AREA, 0)]
+                          (16, rfPoint.LOW_WORKING_Y_AREA, 0), (16, rfPoint.HIGH_WORKING_Y_AREA, 0)]
             self.rectangleArea.clear()
             for coor in world_area:
                 self.rectangleArea.append(camera_calib.findImage2DCoors(list(coor)))
             self.isShowArea = True
-            self.uic.cbox_working_area.setStyleSheet("color: rgb(255,0,0);background:transparent; margin-left: 8px;")
+            self.uic.actionWorking_Area.setIconVisibleInMenu(True)
         else:
             self.isShowArea = False
-            self.uic.cbox_working_area.setStyleSheet("color: rgb(0,0,0);background:transparent; margin-left: 8px;")
+            self.uic.actionWorking_Area.setIconVisibleInMenu(False)
+
+    def show_size_feat(self):
+        if ffeats.isShowSizeFeats:
+            ffeats.isShowSizeFeats = False
+            self.uic.actionSizeFeatures.setIconVisibleInMenu(False)
+        else:
+            ffeats.isShowSizeFeats = True
+            self.uic.actionSizeFeatures.setIconVisibleInMenu(True)
+
+    def show_logo_feat(self):
+        if ffeats.isShowLogoFeats:
+            ffeats.isShowLogoFeats = False
+            self.uic.actionLogoFeatures.setIconVisibleInMenu(False)
+        else:
+            ffeats.isShowLogoFeats = True
+            self.uic.actionLogoFeatures.setIconVisibleInMenu(True)
 
     @staticmethod
     def convert_cv_qt(cv_img, dis_width, dis_height):
@@ -987,7 +950,7 @@ class MainWindow:
 
         # capture edge down when pick object, the purpose is saving info of product to database
         if self.isPreviousRobotAvailable and not self.isRobotAvailable:
-            if self.isRunConveyor:
+            if lock.isRunConveyor:
                 # show data on sheet
                 self.add_row_data([datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                                    f"{self.product_name}{self.product_index:04d}",
@@ -1011,20 +974,6 @@ class MainWindow:
 
         self.isPreviousRobotAvailable = self.isRobotAvailable
 
-        # device 2: stm32/conveyor
-        if self.isReadSpeedMode:
-            self.buffer = robocod.concatenate(dev="2", cmd=robocod.READSPEED, data=None)
-            _ = serialCom2.send_data(self.buffer)
-            if serialCom2.receive_buff[1] == 0x32:
-                integer = int(serialCom2.receive_buff[2])
-                dec = int(serialCom2.receive_buff[3])
-                cSpeed = float(integer + dec / 10)
-                self.uic.txt_pv_sp.setText(str(cSpeed))
-                serialCom2.receive_buff = b'00000'
-
-                self.draw_graph(self.t, float(self.uic.txt_setpoint_sp.toPlainText()), cSpeed)
-                self.t += 1
-
     @staticmethod
     def result_of_product(size, color, logo):
         """
@@ -1033,10 +982,13 @@ class MainWindow:
         :param logo: logo of product
         :return: Result of Product, Index of size type
         """
-        size_dict = {'16': 1, '18': 2, '20': 3, 'error': 4}
+        size_dict = {'30': 1, '31': 2, '32': 3, 'error': 4}
         color_dict = {'Red': 0, 'Yellow': 1, 'error': 2}
-        logo_dict = {'not error': 0, 'error': 1}
-        if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2 or logo_dict.get(logo, None) == 1:
+        logo_dict = {'not error': 0, 'location error': 1, 'direction error': 2, 'ink error': 3, 'none': 4}
+        if logo_dict.get(logo, None) == 4:
+            return '', size_dict.get(size, None)
+        if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2 or logo_dict.get(logo, None) == 1\
+                or logo_dict.get(logo, None) == 2 or logo_dict.get(logo, None) == 3:
             return 'Error', 4
         return 'Not Error', size_dict.get(size, None)
 
@@ -1076,8 +1028,8 @@ class MainWindow:
         if not isSend:
             return
 
-        if not self.isOpenCam:
-            self.showMessageBox(QMessageBox.Warning, "Check your Camera", "Error", QMessageBox.Ok)
+        if not lock.isOpenCam:
+            self.showMessageBox(QMessageBox.Warning, "Check your Main Camera", "Error", QMessageBox.Ok)
             return
 
         # validate robot is available ? by asking mcu
@@ -1103,7 +1055,7 @@ class MainWindow:
         # on auto mode
         self.isAutoMode = True
         self.isPreviewMode = False
-        self.isReadSpeedMode = False
+        lock.isReadSpeedMode = False
 
         # setup properties
         self.uic.btn_run.setDisabled(True)
@@ -1162,285 +1114,6 @@ class MainWindow:
 
     # endregion
 
-    # region camera calibration
-    def list_opt_calib(self):
-        it = ["Default Calibration", "Custom Calibration"]
-        self.uic.cb_opt_calib_cam.addItems(it)
-
-    def changed_opt(self):
-        if self.uic.cb_opt_calib_cam.currentText() == "Default Calibration":
-            self.uic.lb_opt_calib_cam.setText("Use pretrained model")
-            self.uic.lb_opt_calib_cam.setStyleSheet("color: rgb(0,0,255);")
-            self.uic.btn_calib_mode_cam.setDisabled(True)
-            self.uic.btn_scrshot.setDisabled(True)
-            self.uic.btn_calib_cam.setDisabled(True)
-            self.uic.btn_save_model.setDisabled(True)
-            self.uic.btn_apply_calib_model.setDisabled(False)
-            self.uic.btn_on_cam_test.setDisabled(False)
-            self.uic.cb_calib_model.clear()
-            self.list_calibrated_model()
-        else:
-            self.uic.lb_opt_calib_cam.setText("Create new calib model")
-            self.uic.lb_opt_calib_cam.setStyleSheet("color: rgb(255,0,0);")
-            self.uic.btn_calib_mode_cam.setDisabled(False)
-            self.uic.btn_apply_calib_model.setDisabled(True)
-            self.uic.btn_on_cam_test.setDisabled(True)
-
-    def calib_cam_model(self):
-        if self.uic.btn_calib_mode_cam.text() == "On Mode":
-            if self.isOpenCam or self.isTestCamCalibModel:
-                self.showMessageBox(QMessageBox.Warning, "Another mode is online", "Error", QMessageBox.Ok)
-                return
-
-            # check images file in 'checkerboard' folder
-            ret, num_files = camera_calib.check_file_in_images_folder()
-            if ret:
-                self.msg.setIcon(QMessageBox.Warning)
-                self.msg.setText(f"Images folder has existed {num_files} files, delete all or cancel?")
-                self.msg.setWindowTitle("Warning")
-                self.msg.setStandardButtons(QMessageBox.Ok)
-                self.msg.addButton(QMessageBox.Cancel)
-                reply = self.msg.exec()
-                if reply == QMessageBox.Ok:
-                    camera_calib.delete_files_images_folder()
-                else:
-                    camera_calib.counter_shot_img = num_files + 1
-
-            if mycam.connect_cam():
-                self.uic.btn_calib_mode_cam.setText("Off Mode")
-                self.uic.btn_scrshot.setDisabled(False)
-                self.uic.btn_calib_cam.setDisabled(False)
-                self.uic.cb_opt_calib_cam.setDisabled(True)
-                self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(0,255,0);color: rgb(0,0,0);")
-                _, _ = camera_calib.check_dir()
-                self.uic.txt_info_calib_cam.setText("Start the calibration process")
-                self.isCalibCamMode = True
-        else:
-            self.isCalibCamMode = False
-            if mycam.disconnect_cam():
-                self.uic.btn_calib_mode_cam.setText("On Mode")
-                self.uic.btn_scrshot.setDisabled(True)
-                self.uic.btn_calib_cam.setDisabled(True)
-                self.uic.btn_save_model.setDisabled(True)
-                self.uic.cb_opt_calib_cam.setDisabled(False)
-                self.uic.btn_calib_mode_cam.setStyleSheet("background: rgb(235,235,235);color: rgb(0,0,0);")
-                self.uic.calib_cam_view.clear()
-                self.uic.txt_info_calib_cam.setText("Stop the calibration process")
-
-        def display():
-            try:
-                while self.isCalibCamMode:
-                    if self.isCalibCam:
-                        self.uic.calib_cam_view.clear()
-                        self.isCalibCam = False
-                        break
-
-                    image = mycam.get_frames()
-                    isCheckerBoard, show_img, save_img = camera_calib.detect_checker_board(image)
-                    self.uic.calib_cam_view.setPixmap(self.convert_cv_qt(show_img, 720, 530))
-
-                    del show_img
-
-                    if self.isTakeShot:
-                        _ = camera_calib.save_images(isCheckerBoard, save_img)
-                        self.isTakeShot = False
-                        del save_img
-
-                    if not self.isCalibCamMode:
-                        self.uic.calib_cam_view.clear()
-                        break
-
-            except Exception as e:
-                print(e, "-calib cam mode")
-                pass
-
-        display_thread = threading.Thread(target=display)
-        display_thread.start()
-
-    def take_screen_shot(self):
-        self.isTakeShot = True
-
-    def is_calib_cam(self):
-        camera_calib.counter_shot_img = 1
-        self.isCalibCam = True
-        self.uic.btn_save_model.setDisabled(False)
-        self.uic.btn_scrshot.setDisabled(True)
-        self.uic.txt_info_calib_cam.setText(f"Use data at: '../{camera_calib.img_dir_path}' to calibrate")
-        info_calib = camera_calib.calibrate_camera()
-        self.uic.txt_info_calib_cam.setText(info_calib)
-
-    def is_save_cam_calib_model(self):
-        if not self.uic.txt_name_calib_model.toPlainText():
-            self.uic.txt_info_calib_cam.setStyleSheet("background: rgb(255,0,0);")
-            self.uic.txt_info_calib_cam.setText("Insert the calibrate model name to continue")
-        else:
-            self.uic.txt_info_calib_cam.setStyleSheet("background: transparent;")
-            model_name = self.uic.txt_name_calib_model.toPlainText()
-            self.uic.txt_info_calib_cam.setText(f"Save model into: '../{camera_calib.calib_dir_path}/{model_name}'")
-            self.uic.btn_save_model.setDisabled(True)
-            info_save, _ = camera_calib.save_model(model_name)
-            self.uic.txt_info_calib_cam.setText(info_save)
-
-    def list_calibrated_model(self):
-        files_name = camera_calib.list_model_names()
-        self.uic.cb_calib_model.addItems(files_name)
-
-    def apply_calib_cam_model(self):
-        if not self.isCalibSizeModelMode:
-            info_apply = camera_calib.load_model(self.uic.cb_calib_model.currentText())
-            self.uic.txt_info_calib_cam.setText(info_apply)
-            self.uic.txt_info_calib_cam.setStyleSheet("background: transparent;")
-            self.uic.txt_calib_model.setText(f"Change to '{self.uic.cb_calib_model.currentText()}' model")
-            self.uic.lb_info.setText(f"Change to '{self.uic.cb_calib_model.currentText()}' model")
-        else:
-            self.uic.txt_info_calib_cam.setStyleSheet("background: rgb(255,0,0);")
-            self.uic.txt_info_calib_cam.setText("Camera calibration mode is online")
-
-    def test_calib_cam_model(self):
-        if self.uic.btn_on_cam_test.text() == "ON":
-            if self.isCalibCamMode or self.isOpenCam:
-                self.showMessageBox(QMessageBox.Warning, "Another mode is online", "Error", QMessageBox.Ok)
-                return
-            if camera_calib.Z == 0:
-                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found", "Error", QMessageBox.Ok)
-                return
-            if mycam.connect_cam():
-                self.uic.btn_on_cam_test.setText("OFF")
-                self.uic.btn_on_cam_test.setStyleSheet("background: rgb(0,255,0);")
-                self.uic.txt_info_calib_cam.setText("Insert the checkerboard to test model")
-                self.isTestCamCalibModel = True
-                self.uic.btn_apply_calib_model.setDisabled(True)
-        else:
-            self.isTestCamCalibModel = False
-            if mycam.disconnect_cam():
-                self.uic.btn_on_cam_test.setText("ON")
-                self.uic.btn_on_cam_test.setStyleSheet("background: rgb(235,235,235);")
-                self.uic.calib_cam_view.clear()
-                self.uic.btn_apply_calib_model.setDisabled(False)
-
-        def display():
-            while self.isTestCamCalibModel:
-                try:
-                    while self.isTestCamCalibModel:
-                        image = mycam.get_frames()
-                        show_img = camera_calib.get_undistorted_images(image)
-                        show_img = camera_calib.test_model_use_checkerboard(show_img, int(self.set_num_points()))
-                        self.uic.calib_cam_view.setPixmap(self.convert_cv_qt(show_img, 720, 540))
-
-                        if not self.isTestCamCalibModel:
-                            self.uic.calib_cam_view.clear()
-                            break
-
-                except Exception as e:
-                    print(e, "-test calib cam mode")
-
-        display_thread = threading.Thread(target=display)
-        display_thread.start()
-
-    def set_num_points(self):
-        return self.uic.slide_points_test.value()
-
-    # endregion
-
-    # region conveyor speed
-    def draw_graph(self, x, y_sp, y_pv):
-        self.uic.graphicsView.scene().clear()
-        self.x.append(x)
-        self.y_pv.append(y_pv)
-        self.y_sp.append(y_sp)
-        plt.plot(self.x, self.y_pv, 'r')
-        plt.plot(self.x, self.y_sp, 'b')
-        self.fig.savefig('data/graph.png')
-        pixmap = QPixmap('data/graph.png')
-        item = QGraphicsPixmapItem(pixmap)
-        self.uic.graphicsView.scene().addItem(item)
-        self.uic.graphicsView.show()
-
-    def list_low_area(self):
-        it = ["-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0"]
-        self.uic.cb_low_area.addItems(it)
-        self.uic.cb_low_area.setCurrentIndex(10)
-
-    def list_high_area(self):
-        it = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-        self.uic.cb_high_area.addItems(it)
-        self.uic.cb_high_area.setCurrentIndex(3)
-
-    def apply_rf_model(self):
-        if self.uic.btn_apply_rf.text() == "Apply":
-            rfPoint.CONVEYOR_VELOCITY = int(self.uic.txt_convey_sp_rf.toPlainText())
-            rfPoint.LOW_WORKING_Y_AREA = int(self.uic.cb_low_area.currentText())
-            rfPoint.HIGH_WORKING_Y_AREA = int(self.uic.cb_high_area.currentText())
-            rfPoint.create_new_model()
-            self.uic.txt_info_convey_rf.setText("Applied!")
-            self.uic.txt_info_convey_rf.setStyleSheet("background: rgb(0,255,0);")
-            self.uic.btn_apply_rf.setText("Cancel")
-            self.isApplyRF = True
-            self.isReadSpeedMode = False
-            self.x.clear()
-            self.y_pv.clear()
-            self.y_sp.clear()
-        else:
-            self.uic.txt_info_convey_rf.clear()
-            self.uic.txt_info_convey_rf.setStyleSheet("background: transparent")
-            self.uic.btn_apply_rf.setText("Apply")
-            self.isApplyRF = False
-
-    def sp_convey_changed(self):
-        self.uic.txt_convey_sp_rf.setText(self.uic.txt_setpoint_sp.toPlainText())
-
-    def run_conveyor(self):
-        if self.uic.btn_run_convey.text() == "Start Conveyor":
-            if not 1 <= float(self.uic.txt_setpoint_sp.toPlainText()) <= 7:
-                self.showMessageBox(QMessageBox.Warning, "Set-point is out of range [1,7] cm", "Error", QMessageBox.Ok)
-                return
-
-            self.buffer = robocod.concatenate(dev="2", cmd=robocod.RUNCONVEY,
-                                              data=[self.uic.txt_setpoint_sp.toPlainText(),
-                                                    0, 0, 0, 0, 0])
-            isSend = serialCom2.send_data(self.buffer)
-            self.check_sending(isSend)
-            if not isSend:
-                return
-
-            self.uic.btn_run_convey.setText("Stop Conveyor")
-            self.uic.light_stt_convey_sp.setStyleSheet(
-                "background: rgb(51,255,51); border-radius:35px; border-color: rgb(0, 0, 0); "
-                "border-width : 1px; border-style:inset;")
-            self.isRunConveyor = True
-            self.isReadSpeedMode = True
-            self.uic.txt_setpoint_sp.setDisabled(True)
-            if not self.timer.isActive():
-                self.timer.start()
-        else:
-            self.buffer = robocod.concatenate(dev="2", cmd=robocod.STOPCONVEY, data=None)
-            isSend = serialCom2.send_data(self.buffer)
-            self.check_sending(isSend)
-            if not isSend:
-                return
-
-            self.uic.btn_run_convey.setText("Start Conveyor")
-            self.uic.light_stt_convey_sp.setStyleSheet(
-                "background: rgb(255,0,0); border-radius:35px; border-color: rgb(0, 0, 0); "
-                "border-width : 1px; border-style:inset;")
-            self.isRunConveyor = False
-            self.isReadSpeedMode = False
-            self.uic.txt_setpoint_sp.setDisabled(False)
-
-    def clear_graph(self):
-        self.x.clear()
-        self.y_pv.clear()
-        self.y_sp.clear()
-        self.t = 0
-        self.fig.clf()
-        self.uic.graphicsView.scene().clear()
-        plt.xlabel('time (s)')
-        plt.ylabel('speed conveyor (cm/s)')
-        plt.title("PID Control")
-        plt.ylim([0, 10])
-
-    # endregion
-
     # region product data
     def change_page(self):
         self.current_page = 1 - self.current_page
@@ -1470,7 +1143,7 @@ class MainWindow:
         self.product_index = len(sheet)
 
     def export_sheet_to_excel(self):
-        if self.isOpenCam or self.isCalibCamMode or self.isTestCamCalibModel:
+        if lock.isOpenCam or lock.isCalibCamMode or lock.isTestCamCalibModel or lock.isCalibSizeModelMode:
             self.showMessageBox(QMessageBox.Warning, "Cannot export data when the other mode is online", "Error",
                                 QMessageBox.Ok)
             return
@@ -1570,6 +1243,495 @@ class MainWindow:
 
     # endregion
 
+    # region dialog menubar
+    @staticmethod
+    def show_size_dialog():
+        sizeDialog = SizeDialog()
+        sizeDialog.Size_UI.show()
+        sizeDialog.Size_UI.exec_()
+
+    @staticmethod
+    def show_camera_dialog():
+        camDialog = CameraDialog()
+        camDialog.Cam_UI.show()
+        camDialog.Cam_UI.exec_()
+
+    @staticmethod
+    def show_speed_dialog():
+        speedDialog = SpeedDialog()
+        speedDialog.Speed_UI.show()
+        speedDialog.Speed_UI.exec_()
+
+    @staticmethod
+    def exit():
+        sys.exit(app.exec_())
+
+    # endregion
+
+
+class SpeedDialog(MainWindow):
+    def __init__(self):
+        super().__init__()
+        self.Speed_UI = QDialog()
+        self.uic_speed = gui_speed.Ui_Dialog()
+        self.uic_speed.setupUi(self.Speed_UI)
+
+        # Timer Interrupt
+        self.timer_speed = QtCore.QTimer()
+        self.timer_speed.setInterval(1000)
+        self.timer_speed.timeout.connect(self.update)
+
+        # PID graph setting
+        self.scene = QGraphicsScene()
+        self.uic_speed.graphicsView.setScene(self.scene)
+        self.x, self.t = [], 0
+        self.y_pv, self.y_sp = [], []
+        self.fig = plt.figure()
+        self.fig.set_size_inches(550 / 100, 360 / 90)
+        plt.xlabel('time (s)')
+        plt.ylabel('speed conveyor (cm/s)')
+        plt.title("PID Control")
+        plt.ylim([0, 10])
+
+        # event text edit
+        self.uic_speed.txt_setpoint_sp.textChanged.connect(self.sp_convey_changed)
+
+        # event combo box
+        self.uic_speed.cb_low_area.activated.connect(self.list_low_area())
+        self.uic_speed.cb_high_area.activated.connect(self.list_high_area())
+
+        # event push button
+        self.uic_speed.btn_apply_rf.clicked.connect(self.apply_rf_model)
+        self.uic_speed.btn_run_convey.clicked.connect(self.run_conveyor)
+        self.uic_speed.btn_clear_graph.clicked.connect(self.clear_graph)
+
+        self.uic_speed.btn_apply_rf.setToolTip("Apply the 'pick-place' model and stop PID graph")
+        self.uic_speed.btn_apply_rf.setToolTipDuration(10000)
+
+    def update(self):
+        # device 2: stm32/conveyor
+        try:
+            if lock.isReadSpeedMode:
+                self.buffer = robocod.concatenate(dev="2", cmd=robocod.READSPEED, data=None)
+                _ = serialCom2.send_data(self.buffer)
+                if serialCom2.receive_buff[1] == 0x32:
+                    integer = int(serialCom2.receive_buff[2])
+                    dec = int(serialCom2.receive_buff[3])
+                    cSpeed = float(integer + dec / 10)
+                    self.uic_speed.txt_pv_sp.setText(str(cSpeed))
+                    serialCom2.receive_buff = b'00000'
+
+                    self.draw_graph(self.t, float(self.uic_speed.txt_setpoint_sp.toPlainText()), cSpeed)
+                    self.t += 1
+        except Exception as e:
+            print(e, "-speed")
+
+    # region conveyor speed
+    def draw_graph(self, x, y_sp, y_pv):
+        self.uic_speed.graphicsView.scene().clear()
+        self.x.append(x)
+        self.y_pv.append(y_pv)
+        self.y_sp.append(y_sp)
+        plt.plot(self.x, self.y_pv, 'r')
+        plt.plot(self.x, self.y_sp, 'b')
+        self.fig.savefig('data/graph.png')
+        pixmap = QPixmap('data/graph.png')
+        item = QGraphicsPixmapItem(pixmap)
+        self.uic_speed.graphicsView.scene().addItem(item)
+        self.uic_speed.graphicsView.show()
+
+    def list_low_area(self):
+        it = ["-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0"]
+        self.uic_speed.cb_low_area.addItems(it)
+        self.uic_speed.cb_low_area.setCurrentIndex(10)
+
+    def list_high_area(self):
+        it = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+        self.uic_speed.cb_high_area.addItems(it)
+        self.uic_speed.cb_high_area.setCurrentIndex(3)
+
+    def apply_rf_model(self):
+        if self.uic_speed.btn_apply_rf.text() == "Apply":
+            rfPoint.CONVEYOR_VELOCITY = int(self.uic_speed.txt_convey_sp_rf.toPlainText())
+            rfPoint.LOW_WORKING_Y_AREA = int(self.uic_speed.cb_low_area.currentText())
+            rfPoint.HIGH_WORKING_Y_AREA = int(self.uic_speed.cb_high_area.currentText())
+            rfPoint.create_new_model()
+            self.uic_speed.txt_info_convey_rf.setText("Applied!")
+            self.uic_speed.txt_info_convey_rf.setStyleSheet("background: rgb(0,255,0);border:none;")
+            self.uic_speed.btn_apply_rf.setText("Cancel")
+            lock.isApplyRF = True
+            lock.isReadSpeedMode = False
+            self.x.clear()
+            self.y_pv.clear()
+            self.y_sp.clear()
+            self.timer_speed.stop()
+        else:
+            self.uic_speed.txt_info_convey_rf.clear()
+            self.uic_speed.txt_info_convey_rf.setStyleSheet("background: transparent;border:none;")
+            self.uic_speed.btn_apply_rf.setText("Apply")
+            lock.isApplyRF = False
+
+    def sp_convey_changed(self):
+        self.uic_speed.txt_convey_sp_rf.setText(self.uic_speed.txt_setpoint_sp.toPlainText())
+
+    def run_conveyor(self):
+        if self.uic_speed.btn_run_convey.text() == "Start Conveyor":
+            if not 1 <= float(self.uic_speed.txt_setpoint_sp.toPlainText()) <= 6:
+                self.showMessageBox(QMessageBox.Warning, "Set-point is out of range [1,6] cm", "Error", QMessageBox.Ok)
+                return
+
+            self.buffer = robocod.concatenate(dev="2", cmd=robocod.RUNCONVEY,
+                                              data=[self.uic_speed.txt_setpoint_sp.toPlainText(),
+                                                    0, 0, 0, 0, 0])
+            isSend = serialCom2.send_data(self.buffer)
+            self.check_sending(isSend)
+            if not isSend:
+                return
+
+            self.uic_speed.btn_run_convey.setText("Stop Conveyor")
+            self.uic_speed.light_stt_convey_sp.setStyleSheet(
+                "background: rgb(51,255,51); border-radius:35px; border-color: rgb(0, 0, 0); "
+                "border-width : 1px; border-style:inset;")
+            lock.isRunConveyor = True
+            lock.isReadSpeedMode = True
+            self.uic_speed.txt_setpoint_sp.setDisabled(True)
+            self.timer_speed.start()
+        else:
+            self.buffer = robocod.concatenate(dev="2", cmd=robocod.STOPCONVEY, data=None)
+            isSend = serialCom2.send_data(self.buffer)
+            self.check_sending(isSend)
+            if not isSend:
+                return
+
+            self.uic_speed.btn_run_convey.setText("Start Conveyor")
+            self.uic_speed.light_stt_convey_sp.setStyleSheet(
+                "background: rgb(255,0,0); border-radius:35px; border-color: rgb(0, 0, 0); "
+                "border-width : 1px; border-style:inset;")
+            lock.isRunConveyor = False
+            lock.isReadSpeedMode = False
+            self.uic_speed.txt_setpoint_sp.setDisabled(False)
+            self.timer_speed.stop()
+
+    def clear_graph(self):
+        self.x.clear()
+        self.y_pv.clear()
+        self.y_sp.clear()
+        self.t = 0
+        self.fig.clf()
+        self.uic_speed.graphicsView.scene().clear()
+        plt.xlabel('time (s)')
+        plt.ylabel('speed conveyor (cm/s)')
+        plt.title("PID Control")
+        plt.ylim([0, 10])
+
+    # endregion
+
+
+class CameraDialog(MainWindow):
+    def __init__(self):
+        super().__init__()
+        self.Cam_UI = QDialog()
+        self.uic_cam = gui_camera.Ui_CameraDialog()
+        self.uic_cam.setupUi(self.Cam_UI)
+
+        self.isTakeShot = False
+        self.isCalibCam = False
+
+        self.uic_cam.btn_calib_mode_cam.setDisabled(True)
+        self.uic_cam.btn_scrshot.setDisabled(True)
+        self.uic_cam.btn_calib_cam.setDisabled(True)
+        self.uic_cam.btn_save_model.setDisabled(True)
+
+        self.uic_cam.cb_opt_calib_cam_2.activated.connect(self.list_opt_calib())
+        self.uic_cam.cb_opt_calib_cam_2.currentTextChanged.connect(self.changed_opt)
+        self.uic_cam.cb_calib_model.activated.connect(self.list_calibrated_model())
+
+        self.uic_cam.btn_calib_mode_cam.clicked.connect(self.calib_cam_model)
+        self.uic_cam.btn_scrshot.clicked.connect(self.take_screen_shot)
+        self.uic_cam.btn_calib_cam.clicked.connect(self.is_calib_cam)
+        self.uic_cam.btn_save_model.clicked.connect(self.is_save_cam_calib_model)
+        self.uic_cam.btn_apply_calib_model.clicked.connect(self.apply_calib_cam_model)
+        self.uic_cam.btn_on_cam_test.clicked.connect(self.test_calib_cam_model)
+
+        self.uic_cam.slide_points_test.valueChanged.connect(self.set_num_points)
+
+    # region camera calibration
+    def list_opt_calib(self):
+        it = ["Default Calibration", "Custom Calibration"]
+        self.uic_cam.cb_opt_calib_cam_2.addItems(it)
+
+    def list_calibrated_model(self):
+        files_name = camera_calib.list_model_names()
+        self.uic_cam.cb_calib_model.addItems(files_name)
+
+    def changed_opt(self):
+        if self.uic_cam.cb_opt_calib_cam_2.currentText() == "Default Calibration":
+            self.uic_cam.lb_opt_calib_cam_2.setText("Use pretrained model")
+            self.uic_cam.lb_opt_calib_cam_2.setStyleSheet("color: rgb(0,0,255);")
+            self.uic_cam.btn_calib_mode_cam.setDisabled(True)
+            self.uic_cam.btn_scrshot.setDisabled(True)
+            self.uic_cam.btn_calib_cam.setDisabled(True)
+            self.uic_cam.btn_save_model.setDisabled(True)
+            self.uic_cam.btn_apply_calib_model.setDisabled(False)
+            self.uic_cam.btn_on_cam_test.setDisabled(False)
+            self.uic_cam.cb_calib_model.clear()
+            self.list_calibrated_model()
+        else:
+            self.uic_cam.lb_opt_calib_cam_2.setText("Create new calib model")
+            self.uic_cam.lb_opt_calib_cam_2.setStyleSheet("color: rgb(255,0,0);")
+            self.uic_cam.btn_calib_mode_cam.setDisabled(False)
+            self.uic_cam.btn_apply_calib_model.setDisabled(True)
+            self.uic_cam.btn_on_cam_test.setDisabled(True)
+
+    def calib_cam_model(self):
+        if self.uic_cam.btn_calib_mode_cam.text() == "On Mode":
+            if lock.isOpenCam:
+                self.showMessageBox(QMessageBox.Warning, "Main Camera is online", "Error", QMessageBox.Ok)
+                return
+            if lock.isCalibSizeModelMode:
+                self.showMessageBox(QMessageBox.Warning, "Size calibration mode is online", "Error", QMessageBox.Ok)
+                return
+
+            # check images file in 'checkerboard' folder
+            ret, num_files = camera_calib.check_file_in_images_folder()
+            if ret:
+                self.msg.setIcon(QMessageBox.Warning)
+                self.msg.setText(f"Images folder has existed {num_files} files, delete all or cancel?")
+                self.msg.setWindowTitle("Warning")
+                self.msg.setStandardButtons(QMessageBox.Ok)
+                self.msg.addButton(QMessageBox.Cancel)
+                reply = self.msg.exec()
+                if reply == QMessageBox.Ok:
+                    camera_calib.delete_files_images_folder()
+                else:
+                    camera_calib.counter_shot_img = num_files + 1
+
+            if mycam.connect_cam():
+                lock.isCalibCamMode = True
+                self.uic_cam.btn_calib_mode_cam.setText("Off Mode")
+                self.uic_cam.btn_scrshot.setDisabled(False)
+                self.uic_cam.btn_calib_cam.setDisabled(False)
+                self.uic_cam.cb_opt_calib_cam_2.setDisabled(True)
+                self.uic_cam.btn_calib_mode_cam.setStyleSheet("background: rgb(0,255,0);color: rgb(0,0,0);")
+                _, _ = camera_calib.check_dir()
+                self.uic_cam.txt_info_calib_cam.setText("Start the calibration process")
+        else:
+            lock.isCalibCamMode = False
+            if mycam.disconnect_cam():
+                self.uic_cam.btn_calib_mode_cam.setText("On Mode")
+                self.uic_cam.btn_scrshot.setDisabled(True)
+                self.uic_cam.btn_calib_cam.setDisabled(True)
+                self.uic_cam.btn_save_model.setDisabled(True)
+                self.uic_cam.cb_opt_calib_cam_2.setDisabled(False)
+                self.uic_cam.btn_calib_mode_cam.setStyleSheet("background: rgb(235,235,235);color: rgb(0,0,0);")
+                self.uic_cam.calib_cam_view.clear()
+                self.uic_cam.txt_info_calib_cam.setText("Stop the calibration process")
+
+        def display():
+            try:
+                while lock.isCalibCamMode:
+                    if self.isCalibCam:
+                        self.uic_cam.calib_cam_view.clear()
+                        self.isCalibCam = False
+                        break
+
+                    image = mycam.get_frames()
+                    isCheckerBoard, show_img, save_img = camera_calib.detect_checker_board(image)
+                    self.uic_cam.calib_cam_view.setPixmap(self.convert_cv_qt(show_img, 720, 530))
+
+                    del show_img
+
+                    if self.isTakeShot:
+                        _ = camera_calib.save_images(isCheckerBoard, save_img)
+                        self.isTakeShot = False
+                        del save_img
+
+                    if not lock.isCalibCamMode:
+                        self.uic_cam.calib_cam_view.clear()
+                        break
+
+            except Exception as e:
+                print(e, "-calib cam mode")
+                pass
+
+        display_thread = threading.Thread(target=display)
+        display_thread.start()
+
+    def take_screen_shot(self):
+        self.isTakeShot = True
+
+    def is_calib_cam(self):
+        camera_calib.counter_shot_img = 1
+        self.isCalibCam = True
+        self.uic_cam.btn_save_model.setDisabled(False)
+        self.uic_cam.btn_scrshot.setDisabled(True)
+        self.uic_cam.txt_info_calib_cam.setText(f"Use data at: '../{camera_calib.img_dir_path}' to calibrate")
+        info_calib = camera_calib.calibrate_camera()
+        self.uic_cam.txt_info_calib_cam.setText(info_calib)
+
+    def is_save_cam_calib_model(self):
+        if not self.uic_cam.txt_name_calib_model.toPlainText():
+            self.uic_cam.txt_info_calib_cam.setStyleSheet("background: rgb(255,0,0);")
+            self.uic_cam.txt_info_calib_cam.setText("Insert the calibrate model name to continue")
+        else:
+            self.uic_cam.txt_info_calib_cam.setStyleSheet("background: transparent;")
+            model_name = self.uic_cam.txt_name_calib_model.toPlainText()
+            self.uic_cam.txt_info_calib_cam.setText(f"Save model into: '../{camera_calib.calib_dir_path}/{model_name}'")
+            self.uic_cam.btn_save_model.setDisabled(True)
+            info_save, _ = camera_calib.save_model(model_name)
+            self.uic_cam.txt_info_calib_cam.setText(info_save)
+
+    def apply_calib_cam_model(self):
+        info_apply = camera_calib.load_model(self.uic_cam.cb_calib_model.currentText())
+        self.uic_cam.txt_info_calib_cam.setText(info_apply)
+        self.uic_cam.txt_calib_model.setText(f"Change to '{self.uic_cam.cb_calib_model.currentText()}' model")
+
+    def test_calib_cam_model(self):
+        if self.uic_cam.btn_on_cam_test.text() == "ON":
+            if lock.isOpenCam:
+                self.showMessageBox(QMessageBox.Warning, "Main Camera is online", "Error", QMessageBox.Ok)
+                return
+            if lock.isCalibSizeModelMode:
+                self.showMessageBox(QMessageBox.Warning, "Size calibration mode is online", "Error", QMessageBox.Ok)
+                return
+            if camera_calib.Z == 0:
+                self.showMessageBox(QMessageBox.Warning, "Calibration model is not found", "Error", QMessageBox.Ok)
+                return
+            if mycam.connect_cam():
+                self.uic_cam.btn_on_cam_test.setText("OFF")
+                self.uic_cam.btn_on_cam_test.setStyleSheet("background: rgb(0,255,0);")
+                self.uic_cam.txt_info_calib_cam.setText("Insert the checkerboard to test model")
+                lock.isTestCamCalibModel = True
+                self.uic_cam.btn_apply_calib_model.setDisabled(True)
+        else:
+            lock.isTestCamCalibModel = False
+            if mycam.disconnect_cam():
+                self.uic_cam.btn_on_cam_test.setText("ON")
+                self.uic_cam.btn_on_cam_test.setStyleSheet("background: rgb(235,235,235);")
+                self.uic_cam.calib_cam_view.clear()
+                self.uic_cam.btn_apply_calib_model.setDisabled(False)
+
+        def display():
+            while lock.isTestCamCalibModel:
+                try:
+                    while lock.isTestCamCalibModel:
+                        image = mycam.get_frames()
+                        show_img = camera_calib.get_undistorted_images(image)
+                        show_img = camera_calib.test_model_use_checkerboard(show_img, int(self.set_num_points()))
+                        self.uic_cam.calib_cam_view.setPixmap(self.convert_cv_qt(show_img, 720, 540))
+
+                        if not lock.isTestCamCalibModel:
+                            self.uic_cam.calib_cam_view.clear()
+                            break
+
+                except Exception as e:
+                    print(e, "-test calib cam mode")
+
+        display_thread = threading.Thread(target=display)
+        display_thread.start()
+
+    def set_num_points(self):
+        return self.uic_cam.slide_points_test.value()
+
+    # endregion
+
+
+class SizeDialog(MainWindow):
+    def __init__(self):
+        super().__init__()
+        self.Size_UI = QDialog()
+        self.uic_size = gui_size.Ui_Dialog()
+        self.uic_size.setupUi(self.Size_UI)
+        self.result = ''
+        self.isSizeCalibModel = False
+        self.isTestCalibSizeModel = False
+
+        # Timer Interrupt
+        self.timer_size = QtCore.QTimer()
+        self.timer_size.setInterval(500)
+        self.timer_size.timeout.connect(self.update)
+
+        self.uic_size.btn_calib_size.setDisabled(True)
+        self.uic_size.btn_test_size.setDisabled(True)
+
+        self.uic_size.btn_calib_mode.clicked.connect(self.calib_model_mode)
+        self.uic_size.btn_calib_size.clicked.connect(self.is_calib)
+        self.uic_size.btn_test_size.clicked.connect(self.is_test_calib)
+
+    def update(self):
+        self.uic_size.res_size.setText(self.result)
+
+    def calib_model_mode(self):
+        if self.uic_size.btn_calib_mode.text() == "On Mode":
+            if lock.isOpenCam:
+                self.showMessageBox(QMessageBox.Warning, "Main camera is online", "Error", QMessageBox.Ok)
+                return
+            if lock.isCalibCamMode or lock.isTestCamCalibModel:
+                self.showMessageBox(QMessageBox.Warning, "Camera calibration mode is online", "Error", QMessageBox.Ok)
+                return
+            if mycam.connect_cam():
+                lock.isCalibSizeModelMode = True
+                self.uic_size.btn_calib_size.setDisabled(False)
+                self.uic_size.btn_test_size.setDisabled(False)
+                self.uic_size.btn_calib_mode.setText("Off Mode")
+                self.uic_size.btn_calib_mode.setStyleSheet("background: rgb(0,255,0);")
+                self.uic_size.lb_info.setText("Start calibrating size model\nInsert standard size 30 object")
+                self.timer_size.start()
+                ffeats.isShowLogoFeats = False
+        else:
+            lock.isCalibSizeModelMode = False
+            if mycam.disconnect_cam():
+                self.uic_size.btn_calib_size.setDisabled(True)
+                self.uic_size.btn_test_size.setDisabled(True)
+                self.uic_size.btn_calib_mode.setText("On Mode")
+                self.uic_size.btn_calib_mode.setStyleSheet("background: rgb(235,235,235);")
+                self.uic_size.lb_info.setText("Stop calibrating size model")
+                self.timer_size.stop()
+
+        def display():
+            try:
+                while lock.isCalibSizeModelMode:
+                    image = mycam.get_frames()
+                    isObject, _, _, bbox, _ = object_processing.obj_detector_process(image)
+                    if isObject:
+                        x1, y1, x2, y2 = bbox[0], bbox[1], bbox[2], bbox[3]
+                        img_org, img_contour = preprocessing_obj(image, (x1, y1, x2, y2))
+                        img, _, d1, d2, d3 = ffeats.find_size_features(img_org, img_contour)
+                        self.uic_size.calib_size_view.setPixmap(self.convert_cv_qt(img, 600, 450))
+
+                        if self.isSizeCalibModel:
+                            self.isSizeCalibModel = False
+                            size_calib.convert(d1, d2, d3)
+                            sz_color_processing.cf1 = size_calib.cf1
+                            sz_color_processing.cf2 = size_calib.cf2
+                            sz_color_processing.cf3 = size_calib.cf3
+                            self.result = ''
+
+                        if self.isTestCalibSizeModel:
+                            self.isTestCalibSizeModel = False
+                            self.result = size_calib.test(d1, d2, d3)
+                    else:
+                        self.uic_size.calib_size_view.setPixmap(self.convert_cv_qt(image, 600, 450))
+                        self.isTestCalibSizeModel = False
+                        self.isSizeCalibModel = False
+
+                if not lock.isCalibSizeModelMode:
+                    self.uic_size.calib_size_view.clear()
+
+            except Exception as e:
+                print(e)
+
+        display_thread = threading.Thread(target=display)
+        display_thread.start()
+
+    def is_calib(self):
+        self.isSizeCalibModel = True
+        self.uic_size.lb_info.setText("Calibrated")
+
+    def is_test_calib(self):
+        self.isTestCalibSizeModel = True
+        self.uic_size.lb_info.setText("Test new calibrated model")
+
 
 if __name__ == '__main__':
     # load the size, color model
@@ -1581,7 +1743,10 @@ if __name__ == '__main__':
     # load logo svm model
     logo_processing = LogoProcess()
 
+    # load lock variables
+    lock = Lock()
+
     app = QApplication(sys.argv)
-    self = MainWindow()
-    self.Control_UI.show()
+    main = MainWindow()
+    main.Control_UI.show()
     sys.exit(app.exec_())
