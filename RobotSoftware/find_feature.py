@@ -142,8 +142,6 @@ class FindFeatures:
                 elif self.directObject == "horizontal" and self.center_logo[0] < self.x_lines[0]:
                     return 'error'
                 return 'not error'
-        else:
-            return 'none'
 
     def find_logo_direct_features(self, lines):
         # filter on lines to find the desired line => vecto of logo

@@ -574,11 +574,11 @@ class MainWindow:
 
     def move(self):
         try:
-            if not self.uic.txt_mX.toPlainText() or not self.uic.txt_mY.toPlainText() or not self.uic.txt_mZ.toPlainText():
+            if not self.uic.txt_mX.text() or not self.uic.txt_mY.text() or not self.uic.txt_mZ.text():
                 return
-            self.Px = float(self.uic.txt_mX.toPlainText())
-            self.Py = float(self.uic.txt_mY.toPlainText())
-            self.Pz = float(self.uic.txt_mZ.toPlainText())
+            self.Px = float(self.uic.txt_mX.text())
+            self.Py = float(self.uic.txt_mY.text())
+            self.Pz = float(self.uic.txt_mZ.text())
             if self.Px < 5:
                 return
             self.uic.txt_x.setText(str(self.Px))
@@ -793,8 +793,8 @@ class MainWindow:
                             # read buffer -> validate robot is available? then check product is not error or error
                             if self.isRobotAvailable:
                                 # check center point (pick place) is in range of conveyor working-place
-                                # 14 < 'x_coor' < 22 (cen) and 'y_coor' in working area of model RandomForest
-                                if 14 < self.temp_pick_place[0] < 22 and \
+                                # 16 < 'x_coor' < 24 (cen) and 'y_coor' in working area of model RandomForest
+                                if 16 < self.temp_pick_place[0] < 24 and \
                                         rfPoint.LOW_WORKING_Y_AREA < self.temp_pick_place[1] < rfPoint.HIGH_WORKING_Y_AREA:
                                     # check the product is not error
                                     if self.product_result == "Not Error":
@@ -984,9 +984,7 @@ class MainWindow:
         """
         size_dict = {'30': 1, '31': 2, '32': 3, 'error': 4}
         color_dict = {'Red': 0, 'Yellow': 1, 'error': 2}
-        logo_dict = {'not error': 0, 'location error': 1, 'direction error': 2, 'ink error': 3, 'none': 4}
-        if logo_dict.get(logo, None) == 4:
-            return '', size_dict.get(size, None)
+        logo_dict = {'not error': 0, 'location error': 1, 'direction error': 2, 'ink error': 3}
         if size_dict.get(size, None) == 4 or color_dict.get(color, None) == 2 or logo_dict.get(logo, None) == 1\
                 or logo_dict.get(logo, None) == 2 or logo_dict.get(logo, None) == 3:
             return 'Error', 4

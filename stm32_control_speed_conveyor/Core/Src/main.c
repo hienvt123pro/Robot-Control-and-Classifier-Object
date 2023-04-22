@@ -74,8 +74,7 @@ float dErrorTerm1, dErrorTerm2;
 float alpha, beta, gamma, delta, dPIDResult, dPIDResultTerm; 
 bool flagStart = false;
 bool DataAvailable = false;
-int i = 0;
-bool isSizeError = false;
+bool isSizeError;
 
 /* USER CODE END PM */
 
@@ -102,17 +101,18 @@ void subString(uint8_t *s, uint8_t *t,int start, int end);
 void removeComma(uint8_t *oldFrame, uint8_t *newFrame, int start, int end);
 
 
-
 /* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
+
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	isSizeError = false;
+	
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -146,6 +146,7 @@ int main(void)
 	HAL_UART_Receive_DMA(&huart1,(uint8_t *)oldRxData, sizeof(oldRxData));
 	__HAL_TIM_SET_COUNTER(&htim4, 0);
 	
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
 
   /* USER CODE END 2 */
 
@@ -154,7 +155,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+		
     /* USER CODE BEGIN 3 */
 		removeComma(oldRxData, newRxData, 0, 20);
     ReadComm(newRxData,11);
@@ -186,16 +187,7 @@ int main(void)
 			else if (reCmd[0] == 0x39 && reCmd[1] == 0x30 && reDevice[0] == 0x32)
 			{
 				isSizeError = true;
-				if (i == 0) {
-					i = 1;
-					HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET);
-				}
-				if (i == 1) {
-					i = 0;
-					HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
-					HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET);
-				}	
+				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
 			}
 			DataAvailable = false;
 		}
@@ -316,21 +308,6 @@ void WriteComm(uint8_t *pBuff, uint8_t nSize){
 }
 
 
-//How to Read
-/*
-  removeComma(oldRxData, newRxData, 0, 20);
-  ReadComm(newRxData, RECIEVE);
- 
-*/
-
-//void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-////	if(huart->Instance == huart1.Instance)
-////	{
-//		 //removeComma(oldRxData, newRxData, 0, 20);
-//		//ReadComm(newRxData,11);
-//	HAL_UART_Receive_IT(&huart1,(uint8_t *)oldRxData, 22);
-//	//}
-//}
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -380,22 +357,12 @@ void subString(uint8_t *s, uint8_t *t,int start, int end)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	UNUSED(GPIO_Pin);
-	if(GPIO_Pin == rise_edge_sensor_Pin)
-	{
-		if (isSizeError == true) {
-			if (i == 0) {
-				i = 1;
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET);
-			}
-			if (i == 1) {
-				i = 0;
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET);
-			}
+	if(GPIO_Pin == rise_edge_sensor_Pin){	
+		if(isSizeError == true) {
 			isSizeError = false;
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
 		}
-	}
+	 }
 }
 void Error_Handler(void)
 {
@@ -424,4 +391,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-

@@ -84,14 +84,14 @@ while True:
     _, (x1, y1, x2, y2) = detect_object(img)
 
     obj_img, pre_img = preprocessing_img(img, (x1, y1, x2, y2))
-    # obj_img, cen, d1, d2, d3 = find_features(obj_img, pre_img)
+    obj_img, cen, d1, d2, d3 = find_features(obj_img, pre_img)
 
-    cv2.imshow("org", pre_img)
+    cv2.imshow("org", obj_img)
 
     key = cv2.waitKey(1)
     if key == ord('q'):
         """ save data to Excel """
-        # print('- Read a new frame {} with f1={}, f2={}, f3={}, center={}'.format(count, d1, d2, d3, cen))
+        print('- Read a new frame {} with f1={}, f2={}, f3={}, center={}'.format(count, d1, d2, d3, cen))
         print('  label: {}'.format(index_label))
         create_workbook("new_datasets/train/size_data.xlsx", count + 1, d1, d2, d3, index_label)  # change path for train or test purpose
         count = count + 1

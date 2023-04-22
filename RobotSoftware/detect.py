@@ -18,7 +18,7 @@ class ObjectProcess:
     def __init__(self):
         self.obj_model = torch.hub.load('ultralytics/yolov5', 'custom', path='models/obj.pt', force_reload=True)
         self.obj_model.iou = 0.5
-        self.obj_model.conf = 0.83
+        self.obj_model.conf = 0.84
         self.obj_classes = self.obj_model.names
         self.waited_capture = cv2.imread("GUI/load_image.png")
 
@@ -195,8 +195,6 @@ class LogoProcess:
         if result_location == "error":
             cv2.putText(logo, "Location Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
             return "location error"
-        elif result_location == 'none':
-            return 'none'
 
         # check direction
         if int(ffeats.center_obj[0, 0]) != 0:
@@ -213,10 +211,6 @@ class LogoProcess:
                 if not (82 < angle < 96):
                     cv2.putText(logo, "Direction Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
                     return "direction error"
-            else:
-                return 'none'
-        else:
-            return 'none'
 
         # check lost ink
         logo_image = cv2.resize(logo_detected, (64, 64))
