@@ -23,6 +23,7 @@ class FindFeatures:
         self.x_lines = [0, 0]
         self.isShowSizeFeats = True
         self.isShowLogoFeats = False
+        self.isShowColorFeats = False
 
     def find_size_features(self, img_org, img_contour):
         img_origin = cv2.resize(img_org, (640, 480))
@@ -119,7 +120,7 @@ class FindFeatures:
         point = contours[index]
         return tuple(point)
 
-    def find_logo_locate_features(self):
+    def find_the_bigger_part(self):
         if len(self.cor_part1) > 0:
             areas = map(cv2.contourArea, [self.cor_part1, self.cor_part3])
             area_part1, area_part3 = areas
@@ -129,8 +130,14 @@ class FindFeatures:
                 bigger_part_obj = "part3"
             else:
                 bigger_part_obj = "part1"
+            return bigger_part_obj
+        else:
+            return ""
 
-            if bigger_part_obj == "part3":
+    def find_logo_locate_features(self):
+        bigger_part = self.find_the_bigger_part()
+        if bigger_part:
+            if bigger_part == "part3":
                 if self.directObject == "vertical" and self.center_logo[1] > self.y_lines[1]:
                     return 'error'
                 elif self.directObject == "horizontal" and self.center_logo[0] > self.x_lines[1]:

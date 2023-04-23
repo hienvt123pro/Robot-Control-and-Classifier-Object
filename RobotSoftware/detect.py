@@ -106,7 +106,7 @@ class SizeAndColorProcess:
     # preprocessing data for color model
     @staticmethod
     def transform_color(I, c_X, c_Y):
-        cen_img = I[c_Y - 50:c_Y + 50, c_X - 50:c_X + 50]
+        cen_img = I[c_Y - 40:c_Y + 40, c_X - 40:c_X + 40]
         img_hsv = cv2.cvtColor(cen_img, cv2.COLOR_BGR2HSV)
         img_rz = cv2.resize(img_hsv, (80, 80))
         img_output = img_rz / 255
@@ -138,7 +138,30 @@ class SizeAndColorProcess:
             # detect color
             cX = int(center[0, 0])
             cY = int(center[0, 1])
-            predict_color = self.color_model.predict(self.transform_color(img, cX, cY), verbose=0)
+            bigger_part_obj = ffeats.find_the_bigger_part()
+            center_index_x, center_index_y = 0, 0
+            if bigger_part_obj:
+                if bigger_part_obj == "part3":
+                    if ffeats.directObject == "vertical":
+                        center_index_y = 50
+                        center_index_x = 0
+                    elif ffeats.directObject == "horizontal":
+                        center_index_y = 0
+                        center_index_x = 50
+                else:
+                    if ffeats.directObject == "vertical":
+                        center_index_y = -50
+                        center_index_x = 0
+                    elif ffeats.directObject == "horizontal":
+                        center_index_y = 0
+                        center_index_x = -50
+
+            if ffeats.isShowColorFeats:
+                cv2.rectangle(img, (cX + center_index_x - 40, cY + center_index_y - 40),
+                              (cX + center_index_x + 40, cY + center_index_y + 40), (0, 255, 0), 2)
+
+            predict_color = self.color_model.predict(self.transform_color(img, cX + center_index_x, cY + center_index_y),
+                                                     verbose=0)
             y_pred = np.argmax(predict_color)
             color = self.color_result(y_pred)
             if predict_color[0, y_pred] < self.COLOR_MODEL_THRESHOLD:
@@ -213,8 +236,7 @@ class LogoProcess:
                     return "direction error"
 
         # check lost ink
-        logo_image = cv2.resize(logo_detected, (64, 64))
-        logo_gray_image = cv2.cvtColor(logo_image, cv2.COLOR_BGR2GRAY)
+        logo_gray_image = cv2.cvtColor(cv2.resize(logo_detected, (64, 64)), cv2.COLOR_BGR2GRAY)
         logo_features = self.hog.compute(logo_gray_image)
         features = np.array(logo_features).reshape(-1)
         prediction = self.logo_model.predict(np.expand_dims(features, axis=0), verbose=0)

@@ -86,8 +86,7 @@ loaded_model.load_weights("output_models/logo.h5")
 
 while True:
     _, img = vid.read()
-    isObject, yolo_img, logo, _, vec1, length = detect_object(img)
-    vec2 = [0, 0]
+    isObject, yolo_img, logo, _ = detect_object(img)
 
     cv2.imshow("img", yolo_img)
     if isObject:

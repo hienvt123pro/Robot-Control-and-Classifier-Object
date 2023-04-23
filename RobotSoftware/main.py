@@ -156,6 +156,7 @@ class MainWindow:
         self.uic.actionWorking_Area.triggered.connect(self.show_working_area)
         self.uic.actionSizeFeatures.triggered.connect(self.show_size_feat)
         self.uic.actionLogoFeatures.triggered.connect(self.show_logo_feat)
+        self.uic.actionColorFeatures.triggered.connect(self.show_color_feat)
 
         # event tableWidget
         self.uic.tableWidget.cellClicked.connect(self.handle_cell_clicked)
@@ -903,6 +904,14 @@ class MainWindow:
         else:
             ffeats.isShowLogoFeats = True
             self.uic.actionLogoFeatures.setIconVisibleInMenu(True)
+
+    def show_color_feat(self):
+        if ffeats.isShowColorFeats:
+            ffeats.isShowColorFeats = False
+            self.uic.actionColorFeatures.setIconVisibleInMenu(False)
+        else:
+            ffeats.isShowColorFeats = True
+            self.uic.actionColorFeatures.setIconVisibleInMenu(True)
 
     @staticmethod
     def convert_cv_qt(cv_img, dis_width, dis_height):

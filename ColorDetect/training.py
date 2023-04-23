@@ -3,6 +3,11 @@ from keras.layers import Conv2D, Dense, Flatten, MaxPool2D
 from load_data_training import MasterImage
 from keras.models import model_from_json
 
+BATCH_SIZE = 16
+EPOCHS = 20
+# create new model or use pretrained model (1 or 2)
+OPTION_MODEL = 2
+
 # -----------------------------------------
 # 1. Load dataset from your path, if the data haven't saved as file.pkl before, the code will create new file.pkl
 path = 'C:/Users/hieng/PycharmProjects/ColorDetect/dataset'
@@ -12,42 +17,36 @@ X_train, Y_train = a.load_dataset()
 # -----------------------------------------
 # 2. Create structure of CNN
 
-# # defining model
-# model = Sequential()
-#
-# # adding convolution layer
-# model.add(Conv2D(64, (2, 2), strides=3, activation='relu', input_shape=(80, 80, 3)))
-#
-# # adding pooling layer
-# model.add(MaxPool2D(2, 2))
-#
-# # adding convolution layer
-# model.add(Conv2D(24, (2, 2), strides=2, activation='relu'))
-#
-# # adding pooling layer
-# model.add(MaxPool2D(2, 2))
-#
-# # adding fully connected layer
-# model.add(Flatten())
-# model.add(Dense(32, activation='relu'))
-#
-# # adding output layer
-# model.add(Dense(3, activation='softmax'))
-#
-# model.summary()
+if OPTION_MODEL == 1:
+    # defining model
+    model = Sequential()
 
-# transfer model
-json_file = open('old/color.json', 'r')
-loaded_model_json = json_file.read()
-json_file.close()
-model = model_from_json(loaded_model_json)
-model.load_weights("old/color.h5")
+    # adding convolution layer
+    model.add(Conv2D(16, (2, 2), strides=2, activation='relu', input_shape=(80, 80, 3)))
+    model.add(Conv2D(8, (2, 2), strides=2, activation='relu'))
+    model.add(MaxPool2D(2, 2))
+
+    # adding fully connected layer
+    model.add(Flatten())
+    model.add(Dense(16, activation='relu'))
+
+    # adding output layer
+    model.add(Dense(3, activation='softmax'))
+else:
+    # transfer model
+    json_file = open('old/color.json', 'r')
+    loaded_model_json = json_file.read()
+    json_file.close()
+    model = model_from_json(loaded_model_json)
+    model.load_weights("old/color.h5")
+
+model.summary()
 
 # compiling the model
 model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
 # fitting the model
-model.fit(X_train, Y_train, batch_size=16, epochs=25)
+model.fit(X_train, Y_train, batch_size=BATCH_SIZE, epochs=EPOCHS)
 
 # evaluate the model
 scores = model.evaluate(X_train, Y_train)
