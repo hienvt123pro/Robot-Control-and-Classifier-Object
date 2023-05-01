@@ -3,10 +3,10 @@ from keras.layers import Conv2D, Dense, Flatten, MaxPool2D
 from load_data_training import MasterImage
 from keras.models import model_from_json
 
-BATCH_SIZE = 16
-EPOCHS = 12
+BATCH_SIZE = 12
+EPOCHS = 160
 # create new model or use pretrained model (1 or 2)
-OPTION_MODEL = 2
+OPTION_MODEL = 1
 
 # -----------------------------------------
 # 1. Load dataset from your path, if the data haven't saved as file.pkl before, the code will create new file.pkl
@@ -22,8 +22,8 @@ if OPTION_MODEL == 1:
     model = Sequential()
 
     # adding convolution layer
-    model.add(Conv2D(16, (2, 2), strides=2, activation='relu', input_shape=(80, 80, 3)))
-    model.add(Conv2D(8, (2, 2), strides=2, activation='relu'))
+    model.add(Conv2D(16, (2, 2), strides=3, activation='relu', input_shape=(80, 80, 3)))
+    model.add(Conv2D(16, (2, 2), strides=2, activation='relu'))
     model.add(MaxPool2D(2, 2))
 
     # adding fully connected layer

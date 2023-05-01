@@ -31,7 +31,7 @@ def find_features(img_org, img_contour):
 
                 # check object and split 3 part of object
                 x, y, w, h = cv2.boundingRect(best_contour)
-                if h > w and 1 <= h/w <= 2.2:
+                if h > w and 1 <= h/w <= 2.5:
                     split_lines = round(h / 3, 2)
                     lines = [y + split_lines, y + 2 * split_lines]
                     parts = [[] for _ in range(3)]

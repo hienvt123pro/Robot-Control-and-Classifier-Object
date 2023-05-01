@@ -93,7 +93,7 @@ while True:
         """ save data to Excel """
         print('- Read a new frame {} with f1={}, f2={}, f3={}, center={}'.format(count, d1, d2, d3, cen))
         print('  label: {}'.format(index_label))
-        create_workbook("new_datasets/train/data_bonus.xlsx", count + 1, d1, d2, d3, index_label)  # change path for train or test purpose
+        create_workbook("new_datasets/test/size_data.xlsx", count + 1, d1, d2, d3, index_label)  # change path for train or test purpose
         count = count + 1
     if key == ord('c'):
         """ change label """

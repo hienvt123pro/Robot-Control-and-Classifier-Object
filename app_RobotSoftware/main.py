@@ -580,7 +580,7 @@ class MainWindow:
             self.Px = float(self.uic.txt_mX.text())
             self.Py = float(self.uic.txt_mY.text())
             self.Pz = float(self.uic.txt_mZ.text())
-            if self.Px < 5:
+            if self.Px < 3 and self.Py < 3:
                 return
             self.uic.txt_x.setText(str(self.Px))
             self.uic.txt_y.setText(str(self.Py))

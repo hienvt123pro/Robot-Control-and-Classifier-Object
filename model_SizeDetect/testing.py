@@ -8,25 +8,27 @@ from sklearn.metrics import confusion_matrix, accuracy_score
 # ------------------------------------------
 # 1. Load the trained model
 
-path_old = "old/old1/"
+path_old = "old/old4/"
 path_new = "output_models/"
+path = path_old
+
 # load json and create model
-json_file = open(f'{path_new}/size.json', 'r')
+json_file = open(f'{path}/size.json', 'r')
 loaded_model_json = json_file.read()
 json_file.close()
 loaded_model = model_from_json(loaded_model_json)
 
 # load weights into new model
-loaded_model.load_weights(f"{path_new}/size.h5")
+loaded_model.load_weights(f"{path}/size.h5")
 print("Loaded model from disk")
 
 
 # ------------------------------------------
 # 2. Scaler the test input
 
-MAX_DATA_TEST_LEN = 129
+MAX_DATA_TEST_LEN = 215
 
-sc = joblib.load('output_models/scaler_size.save')
+sc = joblib.load(f"{path}/scaler_size.save")
 
 data_test = pd.read_excel(r'new_datasets/test/size_data.xlsx', sheet_name='size')
 X1_test = pd.DataFrame(data_test.iloc[0:MAX_DATA_TEST_LEN, :], columns=['d1'])
