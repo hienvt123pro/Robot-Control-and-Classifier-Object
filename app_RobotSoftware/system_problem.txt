@@ -1,0 +1,36 @@
+Error when robot picking object, some reasons is:
+- error in camera calibration, although the average total deviation in the working coordinate space of the robot is
+    about 0.5%.
+- error in actual measurement to calibrate camera and control the position for robot.
+- error in robot calibration, the reference angles cannot be calculated with absolute precision.
+- intrinsic error in robot (structure of the robot).
+- error in object tracking algorithm.
+
+
+Steps to packet software (complex):
+- use 'auto_py_to_exe': add file-data, add folder, add icon:
+    + add hidden-import: yaml, tqdm, PIL, PIL.ExitTags, PIL.Image, PIL.ImageOps, typing, ultralytics.
+
+- revise from line 197 to 212 in C:\Users\hieng\AppData\Roaming\Python\Python310\site-packages\torch\hub.py:
+    *--code--*
+    if use_cache:
+        if verbose:
+            # sys.stderr.write('Using cache found in {}\n'.format(repo_dir))
+            pass
+    else:
+        # Validate the tag/branch is from the original repo instead of a forked repo
+        if not skip_validation:
+            _validate_not_a_forked_repo(repo_owner, repo_name, ref)
+
+        cached_file = os.path.join(hub_dir, normalized_br + '.zip')
+        _remove_if_exists(cached_file)
+        try:
+            url = _git_archive_link(repo_owner, repo_name, ref)
+            # sys.stderr.write('Downloading: \"{}\" to {}\n'.format(url, cached_file))
+            download_url_to_file(url, cached_file, progress=False)
+
+- revise line 856 in C:\Users\hieng\AppData\Roaming\Python\Python310\site-packages\absl\logging\__init__.py:
+    *--code--*
+    except (EnvironmentError, ValueError, AttributeError):
+
+- add folder 'ultralytics' of path C:\Users\hieng\AppData\Local\Programs\Python\Python310\Lib\site-packages to packet folder.

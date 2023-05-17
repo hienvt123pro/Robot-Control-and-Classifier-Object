@@ -111,6 +111,14 @@ class ProductDatabase(PostgresDatabase):
         cnt.close()
         return content
 
+    def delete_img_if_empty_database(self):
+        if not self.read_from_database():
+            for file_name in os.listdir(self.dirs[0]):
+                file_path = os.path.join(self.dirs[0], file_name)
+                if file_path.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp")):
+                    # Xóa file ảnh
+                    os.remove(file_path)
+
     def export_excel(self):
         data = self.read_from_database()
         if data:

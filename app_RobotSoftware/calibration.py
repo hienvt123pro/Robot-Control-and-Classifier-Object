@@ -78,13 +78,13 @@ class CamCalib:
     - Find pixels in 2D space from opencv support library.
     - Use cv2.calibrateCamera() to find:
         => K_mtx: intrinsic matrix camera matrix, is a 3x3 matrix representing the relationship between coordinates in
-    real space and coordinates in image space. This matrix includes parameters such as focal length, focal distance, and
+    camera space and coordinates in image space. This matrix includes parameters such as focal length, focal distance, and
     center position of the image in image space.
         => dist: vector distortion coefficients, is a vector of length 5 that contains coefficients to represent distortions
     in the camera image, including curve deviation, angular deviation, ...
-        => rvecs: list of rotation vectors, each vector is a rotation to transform real space into image space. This vector
+        => rvecs: list of rotation vectors, each vector is a rotation to transform camera space into real space. This vector
     is represented by the Roll-Pitch-Yaw parameters.
-        => tvecs: a list of translation vectors, each vector is a translation to transform real space into image space.
+        => tvecs: a list of translation vectors, each vector is a translation to transform camera space into real space.
 
     These values can then be used to convert coordinates between real and image space, as well as to correct for errors
     in the image caused by the camera.

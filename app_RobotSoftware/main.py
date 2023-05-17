@@ -74,6 +74,7 @@ class MainWindow:
         self.refresh_sheet()
         self.image_error_product = object_processing.waited_capture
         product_database.check_dir()
+        product_database.delete_img_if_empty_database()
 
         # region robot params
         self.d1 = 12.9
@@ -580,7 +581,11 @@ class MainWindow:
             self.Px = float(self.uic.txt_mX.text())
             self.Py = float(self.uic.txt_mY.text())
             self.Pz = float(self.uic.txt_mZ.text())
-            if self.Px < 3 and self.Py < 3:
+            if self.Px < 5 and self.Py < 5:
+                return
+            if self.Px > 28 or self.Py > 28:
+                return
+            if self.Pz < -5 or self.Pz > 22:
                 return
             self.uic.txt_x.setText(str(self.Px))
             self.uic.txt_y.setText(str(self.Py))
