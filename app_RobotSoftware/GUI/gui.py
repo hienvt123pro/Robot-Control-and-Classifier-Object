@@ -1645,9 +1645,9 @@ class Ui_MainWindow(object):
         self.cbox_not_error.setText(QCoreApplication.translate("MainWindow", u"Not Error", None))
         self.lb_quantity.setText(QCoreApplication.translate("MainWindow", u"Quantity: ", None))
         self.cb_size.setItemText(0, QCoreApplication.translate("MainWindow", u"All", None))
-        self.cb_size.setItemText(1, QCoreApplication.translate("MainWindow", u"16", None))
-        self.cb_size.setItemText(2, QCoreApplication.translate("MainWindow", u"18", None))
-        self.cb_size.setItemText(3, QCoreApplication.translate("MainWindow", u"20", None))
+        self.cb_size.setItemText(1, QCoreApplication.translate("MainWindow", u"30", None))
+        self.cb_size.setItemText(2, QCoreApplication.translate("MainWindow", u"31", None))
+        self.cb_size.setItemText(3, QCoreApplication.translate("MainWindow", u"32", None))
 
         self.cb_color.setItemText(0, QCoreApplication.translate("MainWindow", u"All", None))
         self.cb_color.setItemText(1, QCoreApplication.translate("MainWindow", u"Red", None))

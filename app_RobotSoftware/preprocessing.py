@@ -71,3 +71,29 @@ def preprocessing_logo(logo_img):
     edges_uint8 = cv2.convertScaleAbs(edges)
     lines = cv2.HoughLinesP(edges_uint8, rho=1, theta=np.pi / 180, threshold=15, minLineLength=47, maxLineGap=2)
     return lines
+
+
+def extract_red_logo_shape(img):
+    # grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Gaussian
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    _, binary_image = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return binary_image
+
+
+def extract_yellow_logo_shape(img):
+    # grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Gaussian
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    binary_image = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 19, 4)
+    binary_image = cv2.bitwise_not(binary_image)
+    return binary_image
+
+
+def rotate_logo_shape(img, rotated_angle):
+    w = img.shape[1]
+    h = img.shape[0]
+    rotated_matrix = cv2.getRotationMatrix2D((w / 2, h / 2), rotated_angle, 1)
+    return cv2.warpAffine(img, rotated_matrix, (w, h))

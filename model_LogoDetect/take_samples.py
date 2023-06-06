@@ -55,6 +55,25 @@ def detect_object(input_queue):
         print(e, "-obj process")
 
 
+def extract_red_logo_shape(i):
+    # grayscale
+    gray = cv2.cvtColor(i, cv2.COLOR_BGR2GRAY)
+    # Gaussian
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    _, binary_image = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return binary_image
+
+
+def extract_yellow_logo_shape(i):
+    # grayscale
+    gray = cv2.cvtColor(i, cv2.COLOR_BGR2GRAY)
+    # Gaussian
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    binary_image = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 19, 4)
+    binary_image = cv2.bitwise_not(binary_image)
+    return binary_image
+
+
 # --------------------------------
 # 2. Capture new data.
 
@@ -68,12 +87,13 @@ while True:
     cv2.imshow("img", yolo_img)
     if isObject:
         logo = cv2.resize(logo, (124, 124))
+        logo = extract_yellow_logo_shape(logo)  #
         cv2.imshow("logo", logo)
 
     key = cv2.waitKey(1)
     if key == ord('q'):
         if isObject:
-            cv2.imwrite(f"datasets/not_error/lo101_{count}.jpg", logo)
+            cv2.imwrite(f"datasets/dir_logo/y320_{count}.jpg", logo)
             print(f"Image: {count}")
             count += 1
     if key == ord('e'):

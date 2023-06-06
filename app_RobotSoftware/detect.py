@@ -1,15 +1,17 @@
 """
-Provide functions, class for processing models (yolov5, size ANN, color CNN, logo ANN depend on HoG feature)
+Provide functions, classes for processing models (yolov5, size ANN, color CNN, logo ANN depend on HoG feature)
 """
 
 from find_feature import ffeats
-from preprocessing import preprocessing_obj, preprocessing_logo
+from preprocessing import preprocessing_obj
+# from preprocessing import preprocessing_logo
 from size_uncertainty import SizeProbabilistic
 import load_model_json
 import joblib
 import cv2
 import numpy as np
 import torch
+import math
 
 
 # -----------------------------------------------------------
@@ -197,21 +199,34 @@ def read_image(path):
 # 5. Detect logo of object process
 class LogoProcess:
     def __init__(self):
-        # load size model
+        # load ink logo model
         self.logo_model = load_model_json.load('models/logo.json', "models/logo.h5")
 
         # Initialize HoG descriptor
         self.hog = cv2.HOGDescriptor((64, 64), (16, 16), (8, 8), (8, 8), 9)
 
-    def logo_detector(self, logo):
+        self.REDUNDANT_THRESHOLD_30RED = 3800
+        self.REDUNDANT_THRESHOLD_30YELLOW = 6100
+        self.REDUNDANT_THRESHOLD_31RED = 3800
+        self.REDUNDANT_THRESHOLD_31YELLOW = 6100
+        self.REDUNDANT_THRESHOLD_32RED = 4200
+        self.REDUNDANT_THRESHOLD_32YELLOW = 6100
+
+    def logo_detector(self, logo, size_obj: str, color_obj: str, vector_conveyor: list):
         """
+        :param color_obj: color of detected object
+        :param vector_conveyor: direction vector of conveyor
+        :param size_obj: size of detected object
         :param logo: 124x124
         :return: result of logo
         """
 
+        if size_obj == "error":
+            return ""
+
         logo_detected = logo.copy()
 
-        # check location
+        # region Check Location
         result_location = ffeats.find_logo_locate_features()
         ffeats.cor_part1 = []
         ffeats.cor_part3 = []
@@ -219,33 +234,118 @@ class LogoProcess:
             cv2.putText(logo, "Location Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
             return "location error"
 
-        # check direction
-        if int(ffeats.center_obj[0, 0]) != 0:
-            lines = preprocessing_logo(logo_detected)
-            vecto_logo, x1, y1, x2, y2 = ffeats.find_logo_direct_features(lines)
-            vecto_obj = [int(ffeats.center_obj[0, 0]) - ffeats.center_logo[0],
-                         int(ffeats.center_obj[0, 1]) - ffeats.center_logo[1]]
-            if vecto_logo[0] != 0:
-                angle = self.angle_between(np.array(vecto_obj), np.array(vecto_logo))
-                if ffeats.isShowLogoFeats:
-                    cv2.line(logo, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                    cv2.putText(logo, str(round(float(angle), 2)), (10, 30), cv2.FONT_HERSHEY_PLAIN, 0.7,
-                                (255, 0, 0), 1, cv2.LINE_AA)
-                if not (82 < angle < 96):
-                    cv2.putText(logo, "Direction Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
-                    return "direction error"
+        # check length of logo location at the true part
+        len_of_located_logo = math.sqrt((int(ffeats.center_obj[0, 0]) - ffeats.center_logo[0])**2 +
+                                        (int(ffeats.center_obj[0, 1]) - ffeats.center_logo[1])**2)
+        if size_obj == "30":
+            if len_of_located_logo > 93 or len_of_located_logo < 75:
+                cv2.putText(logo, "Location Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+                return "location error"
+        elif size_obj == "31":
+            if len_of_located_logo > 107 or len_of_located_logo < 83:
+                cv2.putText(logo, "Location Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+                return "location error"
+        elif size_obj == "32":
+            if len_of_located_logo > 115 or len_of_located_logo < 89:
+                cv2.putText(logo, "Location Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+                return "location error"
+        else:
+            return ""
 
-        # check lost ink
+        # endregion
+
+        if color_obj == "error":
+            return ""
+
+        # region Check Direction
+        vecto_obj = [int(ffeats.center_obj[0, 0]) - ffeats.center_logo[0],
+                     int(ffeats.center_obj[0, 1]) - ffeats.center_logo[1]]
+        # print(vecto_obj)
+        if vecto_obj[1] < 0:  # direction of object is inverse to direction of conveyor
+            vector_conveyor[0] = -vector_conveyor[0]
+            vector_conveyor[1] = -vector_conveyor[1]
+        rotated_angle = self.angle_between(np.array(vecto_obj), np.array(vector_conveyor))
+        if rotated_angle > 135:
+            rotated_angle = 180 - rotated_angle
+
+        if vecto_obj[1] < 0:  # direction of object is inverse to direction of conveyor
+            if vecto_obj[0] > 7:  # right side, rotate reverse
+                rotated_angle = rotated_angle
+            elif vecto_obj[0] <= -4:  # left side, rotate forward
+                rotated_angle = -rotated_angle
+            else:
+                rotated_angle = -rotated_angle
+        else:
+            if vecto_obj[0] >= 0:  # right side, rotate reverse
+                rotated_angle = -rotated_angle
+            elif vecto_obj[0] < -6:  # left side, rotate forward
+                rotated_angle = rotated_angle
+            else:
+                rotated_angle = -rotated_angle
+
+        # print("angle: ", rotated_angle)
+
+        if vecto_obj[1] > 0:
+            obj_dir = 1  # forward
+        else:
+            obj_dir = 0  # reverse
+
+        redundant_area, type_obj = ffeats.find_logo_direct_features(logo_detected, size_obj, color_obj, rotated_angle, obj_dir)
+        # print("redundant: ", redundant_area)
+
+        if ffeats.isShowLogoFeats:
+            cv2.putText(logo, str(round(float(rotated_angle), 2)), (10, 30), cv2.FONT_HERSHEY_PLAIN,
+                        0.7, (255, 0, 0), 1, cv2.LINE_AA)
+            cv2.putText(logo, str(redundant_area), (10, 50), cv2.FONT_HERSHEY_PLAIN, 0.7, (255, 0, 0), 1, cv2.LINE_AA)
+
+        if type_obj == "30_red" and redundant_area > self.REDUNDANT_THRESHOLD_30RED:
+            isError = True
+        elif type_obj == "30_yellow" and redundant_area > self.REDUNDANT_THRESHOLD_30YELLOW:
+            isError = True
+        elif type_obj == "31_red" and redundant_area > self.REDUNDANT_THRESHOLD_31RED:
+            isError = True
+        elif type_obj == "31_yellow" and redundant_area > self.REDUNDANT_THRESHOLD_31YELLOW:
+            isError = True
+        elif type_obj == "32_red" and redundant_area > self.REDUNDANT_THRESHOLD_32RED:
+            isError = True
+        elif type_obj == "32_yellow" and redundant_area > self.REDUNDANT_THRESHOLD_32YELLOW:
+            isError = True
+        else:
+            isError = False
+        if isError:
+            cv2.putText(logo, "Direction Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+            return "direction error"
+
+        # if int(ffeats.center_obj[0, 0]) != 0:
+        #     lines = preprocessing_logo(logo_detected)
+        #     vecto_logo, x1, y1, x2, y2 = ffeats.find_logo_direct_features(lines)
+        #     vecto_obj = [int(ffeats.center_obj[0, 0]) - ffeats.center_logo[0],
+        #                  int(ffeats.center_obj[0, 1]) - ffeats.center_logo[1]]
+        #     if vecto_logo[0] != 0:
+        #         angle = self.angle_between(np.array(vecto_obj), np.array(vecto_logo))
+        #         if ffeats.isShowLogoFeats:
+        #             cv2.line(logo, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        #             cv2.putText(logo, str(round(float(angle), 2)), (10, 30), cv2.FONT_HERSHEY_PLAIN, 0.7,
+        #                         (255, 0, 0), 1, cv2.LINE_AA)
+        #         if not (82 < angle < 96):
+        #             cv2.putText(logo, "Direction Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
+        #             return "direction error"
+
+        # endregion
+
+        # region Check Lost Ink
         logo_gray_image = cv2.cvtColor(cv2.resize(logo_detected, (64, 64)), cv2.COLOR_BGR2GRAY)
         logo_features = self.hog.compute(logo_gray_image)
         features = np.array(logo_features).reshape(-1)
         prediction = self.logo_model.predict(np.expand_dims(features, axis=0), verbose=0)
         if prediction < 0.5:
-            cv2.putText(logo, "Normal", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(logo, "Normal", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (255, 0, 0), 1, cv2.LINE_AA)
             return "not error"
         else:
             cv2.putText(logo, "Ink Error", (10, 10), cv2.FONT_HERSHEY_PLAIN, 0.9, (0, 0, 255), 1, cv2.LINE_AA)
             return "ink error"
+
+        # endregion
 
     @staticmethod
     def angle_between(v1, v2):

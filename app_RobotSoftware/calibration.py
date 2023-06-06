@@ -41,6 +41,7 @@ class SizeCalib:
             self.cf1 = self.d1_0 / d1
             self.cf2 = self.d2_0 / d2
             self.cf3 = self.d3_0 / d3
+
         except:
             self.cf1 = 0
             self.cf2 = 0
@@ -119,7 +120,8 @@ class CamCalib:
 
         # saved data directory
         self.img_dir_path = "data/checker_board_images"
-        self.calib_dir_path = "data/cam_calib_data"
+        self.intrinsic_path = "data/cam_calib_data/intrinsic"
+        self.extrinsic_path = "data/cam_calib_data/extrinsic"
 
         # load known 3D points
         self.known_obj_3D = joblib.load("data/cam_calib_data/3D_points.save")
@@ -128,11 +130,12 @@ class CamCalib:
         self.FRAME_SIZE = (640, 480)
 
         # data calibration
-        self.K_mtx, self.dist, self.rvecs, self.tvecs = np.zeros((3, 3)), np.zeros((3, 3)), np.zeros((3, 3)), np.zeros((3, 3))
+        self.K_mtx, self.dist = np.zeros((3, 3)), np.zeros((3, 3))
+        self.rvecs, self.tvecs = np.zeros((3, 3)), np.zeros((3, 3))
         self.Z = 0
 
     def check_dir(self):
-        dirs = [self.img_dir_path, self.calib_dir_path]
+        dirs = [self.img_dir_path, self.intrinsic_path, self.extrinsic_path]
         checks = []
 
         for d in dirs:
@@ -179,7 +182,7 @@ class CamCalib:
         else:
             return "Error detect Checkerboard"
 
-    def calibrate_camera(self):
+    def calibrate_camera(self, mode: str):
         obj_point_3D = []
         img_point_2D = []
 
@@ -195,13 +198,21 @@ class CamCalib:
                 corner1 = cv2.cornerSubPix(grayScale, corners, (3, 3), (-1, -1), self.CRITERIA)
                 img_point_2D.append(corner1)
 
-        ret, self.K_mtx, self.dist, self.rvecs, self.tvecs = cv2.calibrateCamera(obj_point_3D, img_point_2D,
-                                                                                 self.FRAME_SIZE, None, None)
-
-        if ret:
-            return 'Successful camera calibration'
+        # calibrating the extrinsic params
+        if mode == "Extrinsic Params":
+            ret, _, _, self.rvecs, self.tvecs = cv2.calibrateCamera(obj_point_3D, img_point_2D, self.FRAME_SIZE,
+                                                                    None, None)
+            if ret:
+                return 'Successful Extrinsic calibration'
+            else:
+                return 'Unsuccessful Extrinsic calibration'
         else:
-            return 'Unsuccessful camera calibration'
+            ret, self.K_mtx, self.dist, _, _ = cv2.calibrateCamera(obj_point_3D, img_point_2D, self.FRAME_SIZE,
+                                                                   None, None)
+            if ret:
+                return 'Successful Intrinsic calibration'
+            else:
+                return 'Unsuccessful Intrinsic calibration'
 
     @staticmethod
     def convert3Dto2D_findDeptZ(K_mtx, rvecs, tvecs, point_3D: list):
@@ -213,9 +224,9 @@ class CamCalib:
         :return: normalize 2D point converting, relative dept Z
         """
 
-        # random relative homogeneous coordinate transformation matrix
-        rmats, _ = cv2.Rodrigues(rvecs[0])
-        R_t = np.hstack((rmats, tvecs[0]))
+        # last relative homogeneous coordinate transformation matrix
+        rmats, _ = cv2.Rodrigues(rvecs[-1])
+        R_t = np.hstack((rmats, tvecs[-1]))
 
         # world coordinates
         world_point = np.array(np.hstack((point_3D, 1)), dtype=np.float32).reshape(4, 1)
@@ -241,9 +252,9 @@ class CamCalib:
         :param Z_dept: Z deep coefficient
         :return: x_world, y_world, z_world
         """
-        # random relative homogeneous coordinate transformation matrix
-        rmats, _ = cv2.Rodrigues(rvecs[0])
-        R_t = np.hstack((rmats, tvecs[0]))
+        # last relative homogeneous coordinate transformation matrix
+        rmats, _ = cv2.Rodrigues(rvecs[-1])
+        R_t = np.hstack((rmats, tvecs[-1]))
 
         # find P matrix
         P_mats = K_mtx.dot(R_t)
@@ -260,24 +271,27 @@ class CamCalib:
 
         return tuple(world_point[:3, 0])
 
-    def save_model(self, name: str):
+    def save_model(self, name: str, mode: str):
         try:
-            _, zDept = self.convert3Dto2D_findDeptZ(self.K_mtx, self.rvecs, self.tvecs, self.known_obj_3D[0, :])
-            np.savez(f"{self.calib_dir_path}/{name}", K_matrix=self.K_mtx, distCoef=self.dist, rVectors=self.rvecs,
-                     tVectors=self.tvecs, Z_dept=zDept)
+            if mode == "Extrinsic Params":
+                np.savez(f"{self.extrinsic_path}/{name}", rVectors=self.rvecs, tVectors=self.tvecs)
+            else:
+                np.savez(f"{self.intrinsic_path}/{name}", K_matrix=self.K_mtx, distCoef=self.dist)
+
             return f"Save model '{name}.npz' successful", True
         except:
             return "Error occurs when saving model", False
 
-    def load_model(self, name: str):
+    def load_model(self, extrinsic: str, intrinsic: str):
         try:
-            data = np.load(f"{self.calib_dir_path}/{name}")
-            self.K_mtx = data['K_matrix']
-            self.dist = data['distCoef']
-            self.rvecs = data['rVectors']
-            self.tvecs = data['tVectors']
-            self.Z = data['Z_dept']
-            return f"Load calibration model '{name}' successful"
+            extrinsic_data = np.load(f"{self.extrinsic_path}/{extrinsic}")
+            intrinsic_data = np.load(f"{self.intrinsic_path}/{intrinsic}")
+            self.K_mtx = intrinsic_data['K_matrix']
+            self.dist = intrinsic_data['distCoef']
+            self.rvecs = extrinsic_data['rVectors']
+            self.tvecs = extrinsic_data['tVectors']
+            _, self.Z = self.convert3Dto2D_findDeptZ(self.K_mtx, self.rvecs, self.tvecs, self.known_obj_3D[0, :])
+            return f"Load calibration model successful"
         except:
             return "Calibration model is not exists"
 
@@ -313,10 +327,15 @@ class CamCalib:
             return cv2.imread("GUI/load_image.png")
 
     def list_model_names(self):
-        npz_files = glob.glob(f"{self.calib_dir_path}/*.npz")
-        for i, f in enumerate(npz_files):
-            npz_files[i] = os.path.basename(f)
-        return npz_files
+        ex_npz_files = glob.glob(f"{self.extrinsic_path}/*.npz")
+        for i, f in enumerate(ex_npz_files):
+            ex_npz_files[i] = os.path.basename(f)
+
+        in_npz_files = glob.glob(f"{self.intrinsic_path}/*.npz")
+        for i, f in enumerate(in_npz_files):
+            in_npz_files[i] = os.path.basename(f)
+
+        return ex_npz_files, in_npz_files
 
     def test_model_use_checkerboard(self, img_undist, num_points):
         """

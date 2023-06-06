@@ -14,7 +14,7 @@ from sklearn.ensemble import RandomForestRegressor
 class RandomForestPredictPoint:
     def __init__(self):
         self.CONVEYOR_VELOCITY = 4  # (cm/sec)
-        self.T_ROBOT = 2.3  # time robot down (sec)
+        self.T_ROBOT = 1.9  # time robot down (sec)
         self.T_DETECT = 0.45  # time_detect (sec)
         self.T_RF = 0.0155  # time_run_rf (sec)
         self.SYS_DELAY_TIME = self.T_ROBOT + self.T_DETECT + self.T_RF  # (sec) / T_DETECT can be measured

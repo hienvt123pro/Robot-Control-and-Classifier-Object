@@ -9,7 +9,7 @@ from keras.models import model_from_json
 # 1. Load yolov5 model and some functions for running the model
 obj_model = torch.hub.load('ultralytics/yolov5', 'custom', path='yolov5_model/obj.pt', force_reload=True)
 obj_model.iou = 0.5
-obj_model.conf = 0.8
+obj_model.conf = 0.84
 obj_classes = obj_model.names
 
 
@@ -65,15 +65,6 @@ vid = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
 # Initialize HoG descriptor
 hog = cv2.HOGDescriptor((64, 64), (16, 16), (8, 8), (8, 8), 9)  # 1764 features
-
-
-def angle_between(v1, v2):
-    v1_unit = v1 / np.linalg.norm(v1)
-    v2_unit = v2 / np.linalg.norm(v2)
-    dot_product = np.dot(v1_unit, v2_unit)
-    angle = np.arccos(dot_product)
-    return np.degrees(angle)
-
 
 # load json and create model
 json_file = open("output_models/logo.json", 'r')

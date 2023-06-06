@@ -42,9 +42,9 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>280</y>
+      <y>310</y>
       <width>311</width>
-      <height>151</height>
+      <height>171</height>
      </rect>
     </property>
     <property name="font">
@@ -63,8 +63,8 @@
     <widget class="QComboBox" name="cb_calib_model">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>60</y>
+       <x>100</x>
+       <y>30</y>
        <width>181</width>
        <height>31</height>
       </rect>
@@ -85,8 +85,8 @@
       <rect>
        <x>10</x>
        <y>30</y>
-       <width>55</width>
-       <height>21</height>
+       <width>71</width>
+       <height>31</height>
       </rect>
      </property>
      <property name="font">
@@ -100,15 +100,15 @@
       <string notr="true">background: transparent;color: black; border:none;</string>
      </property>
      <property name="text">
-      <string>Model:</string>
+      <string>Extrinsic:</string>
      </property>
     </widget>
     <widget class="QPushButton" name="btn_apply_calib_model">
      <property name="geometry">
       <rect>
-       <x>200</x>
-       <y>60</y>
-       <width>101</width>
+       <x>130</x>
+       <y>120</y>
+       <width>121</width>
        <height>31</height>
       </rect>
      </property>
@@ -128,38 +128,47 @@
       <string>Apply</string>
      </property>
     </widget>
-    <widget class="QLabel" name="txt_calib_model">
+    <widget class="QLabel" name="label_45">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>110</y>
-       <width>291</width>
+       <y>70</y>
+       <width>71</width>
        <height>31</height>
       </rect>
      </property>
      <property name="font">
       <font>
-       <family>Noto Sans</family>
-       <pointsize>8</pointsize>
+       <pointsize>10</pointsize>
        <weight>50</weight>
-       <italic>false</italic>
        <bold>false</bold>
       </font>
      </property>
      <property name="styleSheet">
-      <string notr="true">color: black; border:none;</string>
-     </property>
-     <property name="frameShape">
-      <enum>QFrame::NoFrame</enum>
-     </property>
-     <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
+      <string notr="true">background: transparent;color: black; border:none;</string>
      </property>
      <property name="text">
-      <string/>
+      <string>Intrinsic:</string>
      </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
+    </widget>
+    <widget class="QComboBox" name="cb_calib_model_in">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>70</y>
+       <width>181</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>9</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: black;</string>
      </property>
     </widget>
    </widget>
@@ -167,9 +176,9 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>450</y>
+      <y>500</y>
       <width>311</width>
-      <height>151</height>
+      <height>121</height>
      </rect>
     </property>
     <property name="font">
@@ -189,7 +198,7 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>40</y>
+       <y>30</y>
        <width>91</width>
        <height>71</height>
       </rect>
@@ -218,7 +227,7 @@
      <property name="geometry">
       <rect>
        <x>120</x>
-       <y>90</y>
+       <y>70</y>
        <width>171</width>
        <height>21</height>
       </rect>
@@ -245,7 +254,7 @@
      <property name="geometry">
       <rect>
        <x>120</x>
-       <y>45</y>
+       <y>30</y>
        <width>171</width>
        <height>31</height>
       </rect>
@@ -271,7 +280,7 @@
       <x>10</x>
       <y>110</y>
       <width>311</width>
-      <height>151</height>
+      <height>181</height>
      </rect>
     </property>
     <property name="font">
@@ -320,7 +329,7 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>110</y>
+       <y>140</y>
        <width>91</width>
        <height>31</height>
       </rect>
@@ -350,7 +359,7 @@
      <property name="geometry">
       <rect>
        <x>110</x>
-       <y>110</y>
+       <y>140</y>
        <width>91</width>
        <height>31</height>
       </rect>
@@ -379,7 +388,7 @@
      <property name="geometry">
       <rect>
        <x>210</x>
-       <y>110</y>
+       <y>140</y>
        <width>91</width>
        <height>31</height>
       </rect>
@@ -465,6 +474,36 @@
      <property name="sizeAdjustPolicy">
       <enum>QAbstractScrollArea::AdjustToContents</enum>
      </property>
+    </widget>
+    <widget class="QComboBox" name="cb_intrinsic_extrinsic">
+     <property name="geometry">
+      <rect>
+       <x>130</x>
+       <y>100</y>
+       <width>171</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>9</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: black;</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>Extrinsic Params</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Intricsic Params</string>
+      </property>
+     </item>
     </widget>
    </widget>
    <widget class="QLabel" name="label_51">

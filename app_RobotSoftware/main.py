@@ -76,6 +76,9 @@ class MainWindow:
         product_database.check_dir()
         product_database.delete_img_if_empty_database()
 
+        # Vector
+        self.vectorConveyor = [0, 0]
+
         # region robot params
         self.d1 = 12.9
         self.a2 = 14
@@ -723,12 +726,16 @@ class MainWindow:
                 self.uic.lb_info.setText("Terminate detection models")
                 self.timer.stop()
 
+        self.validate_direct_conveyor()
+
         def display():
             try:
                 while lock.isOpenCam:
                     # Detect frames
                     start_time = time.time()
                     image = mycam.get_frames()
+
+                    # YOLOv5 detector
                     isObject, obj_view, logo_view, bbox, cenLogo = object_processing.obj_detector_process(image)
 
                     # save the image if it's an error product
@@ -742,11 +749,16 @@ class MainWindow:
                     if isObject:
                         ffeats.center_logo = cenLogo
 
+                        # size, color detector
                         size_view, size_result, color_result, center_x, center_y = sz_color_processing.detect_size_color(
                             image, bbox[0], bbox[1], bbox[2], bbox[3])
                         self.uic.size_view.setPixmap(self.convert_cv_qt(size_view, 600, 450))
+                        if size_result == "":
+                            continue
 
-                        logo_result = logo_processing.logo_detector(logo_view)
+                        # logo detector
+                        logo_result = logo_processing.logo_detector(logo=logo_view, size_obj=size_result,
+                                                                    color_obj=color_result, vector_conveyor=self.vectorConveyor)
                         self.uic.logo_view.setPixmap(self.convert_cv_qt(logo_view, 200, 200))
 
                         if self.isPreviewMode or self.isRobotAvailable:
@@ -874,6 +886,13 @@ class MainWindow:
 
         display_thread = threading.Thread(target=display)
         display_thread.start()
+
+    def validate_direct_conveyor(self):
+        p3D_0 = [24, 0, 0]
+        p3D_1 = [24, 4, 0]
+        p2D_0 = camera_calib.findImage2DCoors(p3D_0)
+        p2D_1 = camera_calib.findImage2DCoors(p3D_1)
+        self.vectorConveyor = [p2D_1[0] - p2D_0[0], p2D_1[1] - p2D_0[1]]
 
     def show_working_area(self):
         if not self.isShowArea:
@@ -1473,8 +1492,9 @@ class CameraDialog(MainWindow):
         self.uic_cam.cb_opt_calib_cam_2.addItems(it)
 
     def list_calibrated_model(self):
-        files_name = camera_calib.list_model_names()
-        self.uic_cam.cb_calib_model.addItems(files_name)
+        ex_files_name, in_files_name = camera_calib.list_model_names()
+        self.uic_cam.cb_calib_model.addItems(ex_files_name)
+        self.uic_cam.cb_calib_model_in.addItems(in_files_name)
 
     def changed_opt(self):
         if self.uic_cam.cb_opt_calib_cam_2.currentText() == "Default Calibration":
@@ -1487,6 +1507,7 @@ class CameraDialog(MainWindow):
             self.uic_cam.btn_apply_calib_model.setDisabled(False)
             self.uic_cam.btn_on_cam_test.setDisabled(False)
             self.uic_cam.cb_calib_model.clear()
+            self.uic_cam.cb_calib_model_in.clear()
             self.list_calibrated_model()
         else:
             self.uic_cam.lb_opt_calib_cam_2.setText("Create new calib model")
@@ -1515,6 +1536,7 @@ class CameraDialog(MainWindow):
                 reply = self.msg.exec()
                 if reply == QMessageBox.Ok:
                     camera_calib.delete_files_images_folder()
+                    camera_calib.counter_shot_img = 1
                 else:
                     camera_calib.counter_shot_img = num_files + 1
 
@@ -1525,7 +1547,7 @@ class CameraDialog(MainWindow):
                 self.uic_cam.btn_calib_cam.setDisabled(False)
                 self.uic_cam.cb_opt_calib_cam_2.setDisabled(True)
                 self.uic_cam.btn_calib_mode_cam.setStyleSheet("background: rgb(0,255,0);color: rgb(0,0,0);")
-                _, _ = camera_calib.check_dir()
+                camera_calib.check_dir()
                 self.uic_cam.txt_info_calib_cam.setText("Start the calibration process")
         else:
             lock.isCalibCamMode = False
@@ -1578,7 +1600,7 @@ class CameraDialog(MainWindow):
         self.uic_cam.btn_save_model.setDisabled(False)
         self.uic_cam.btn_scrshot.setDisabled(True)
         self.uic_cam.txt_info_calib_cam.setText(f"Use data at: '../{camera_calib.img_dir_path}' to calibrate")
-        info_calib = camera_calib.calibrate_camera()
+        info_calib = camera_calib.calibrate_camera(mode=self.uic_cam.cb_intrinsic_extrinsic.currentText())
         self.uic_cam.txt_info_calib_cam.setText(info_calib)
 
     def is_save_cam_calib_model(self):
@@ -1588,15 +1610,18 @@ class CameraDialog(MainWindow):
         else:
             self.uic_cam.txt_info_calib_cam.setStyleSheet("background: transparent;")
             model_name = self.uic_cam.txt_name_calib_model.toPlainText()
-            self.uic_cam.txt_info_calib_cam.setText(f"Save model into: '../{camera_calib.calib_dir_path}/{model_name}'")
+            if self.uic_cam.cb_intrinsic_extrinsic.currentText() == "Extrinsic Params":
+                self.uic_cam.txt_info_calib_cam.setText(f"Save model into: '../{camera_calib.extrinsic_path}/{model_name}'")
+            else:
+                self.uic_cam.txt_info_calib_cam.setText(f"Save model into: '../{camera_calib.intrinsic_path}/{model_name}'")
             self.uic_cam.btn_save_model.setDisabled(True)
-            info_save, _ = camera_calib.save_model(model_name)
+            info_save, _ = camera_calib.save_model(model_name, self.uic_cam.cb_intrinsic_extrinsic.currentText())
             self.uic_cam.txt_info_calib_cam.setText(info_save)
 
     def apply_calib_cam_model(self):
-        info_apply = camera_calib.load_model(self.uic_cam.cb_calib_model.currentText())
+        info_apply = camera_calib.load_model(self.uic_cam.cb_calib_model.currentText(),
+                                             self.uic_cam.cb_calib_model_in.currentText())
         self.uic_cam.txt_info_calib_cam.setText(info_apply)
-        self.uic_cam.txt_calib_model.setText(f"Change to '{self.uic_cam.cb_calib_model.currentText()}' model")
 
     def test_calib_cam_model(self):
         if self.uic_cam.btn_on_cam_test.text() == "ON":
