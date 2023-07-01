@@ -1,5 +1,6 @@
 # GUI
-![Uploading image.png…]()
+![image](https://github.com/hienvt123pro/Robot-Control-and-Object-Classifier/assets/98166568/eef7693b-c07f-4d11-abb9-32a220be00b1)
+
 
 
 # Robot Control and Object Classifier
