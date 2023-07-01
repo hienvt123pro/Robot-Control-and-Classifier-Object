@@ -1,5 +1,6 @@
-#GUI
-****![Uploading image.png…]()
+# GUI
+![Uploading image.png…]()
+
 
 # Robot Control and Object Classifier
 This is my capstone project.
