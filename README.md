@@ -1,6 +1,11 @@
 # GUI
 ![image](https://github.com/hienvt123pro/Robot-Control-and-Object-Classifier/assets/98166568/eef7693b-c07f-4d11-abb9-32a220be00b1)
-
+Speed GUI.
+![image](https://github.com/hienvt123pro/Robot-Control-and-Object-Classifier/assets/98166568/1036cfdf-35bb-409e-8514-ea0117d330ff)
+Calib GUI.
+![image](https://github.com/hienvt123pro/Robot-Control-and-Object-Classifier/assets/98166568/88926506-b765-43dc-b984-b4bb5515766c)
+Data GUI.
+![image](https://github.com/hienvt123pro/Robot-Control-and-Object-Classifier/assets/98166568/e94b3b34-1241-4a3c-ba41-220c9edecd7d)
 
 
 # Robot Control and Object Classifier
